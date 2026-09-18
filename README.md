@@ -185,6 +185,15 @@ railway up     # desde la raíz: el Dockerfile se construye aquí a propósito
 
 El `Dockerfile` se construye desde la **raíz** (no desde `service/`) porque el servicio importa `web/*.js`. Escucha en `0.0.0.0` y usa el `$PORT` que le inyecte el host. Si usas `LEDGER_FILE`, monta un volumen (en Railway, `/data`) o el registro se pierde en cada despliegue; el servicio avisa por el log al arrancar si no puede escribir.
 
+Dos avisos sobre ese registro, que es el único sitio donde queda la prueba on-chain
+de los cobros reales (hash de la transacción, pagador, importe):
+
+- **Descárgalo de vez en cuando.** Railway borra el contenido de los volúmenes
+  **30 días** después de que expire un plan Free o Trial (60 si es Hobby).
+- **Un volumen por servicio** si acabas desplegando varios: el registro es un
+  `.jsonl` al que cada proceso hace `append`, y dos procesos escribiendo el mismo
+  fichero se pisan.
+
 ### Un servicio o tres, con la misma imagen
 
 El motor es uno solo; qué publica cada proceso lo decide `PRODUCTOS`. Tres
@@ -276,6 +285,52 @@ reutilizan motor y patrones ya escritos (`/v1/scan` el análisis de `/v1/clean`;
 `/v1/secrets` la misma capa de veredicto de `/v1/scan`), así que fueron extensiones
 baratas y de bajo riesgo, no proyectos nuevos.
 
+### El mercado medido (a septiembre de 2026)
+
+La apuesta de arriba es a futuro, así que conviene tener a mano lo que hoy se puede
+**medir** —no proyectar— del comercio entre agentes. Todo lo de esta sección es de
+terceros, con fuente y fecha; ninguna cifra es estimación propia.
+
+| Dato medido | Cifra | Fuente |
+|---|---|---|
+| Comercio **agente-a-agente genuino** (quitando autofinanciación y *wash*) | **~$621.000 en 69 días ≈ $9.000/día** en todo el mundo medido | [Agent Almanac](https://agentalmanac.org/economy), 2026-09-17 |
+| Proveedores que han cobrado algo, alguna vez | **2.524**, frente a 76.698 listados (**1 de cada 30**) | Agent Almanac |
+| Endpoints catalogados que responden | 453 de 484 probados = **0,7% de 74.332** | Agent Almanac |
+| Precio mediano *cotizado* / media *cobrada* | **$0,01** / **$0,38** | Agent Almanac |
+| Pagos por debajo de 10¢ | **96,9%** (y 52,5% por debajo de 1¢) | Agent Almanac |
+| Volumen ajustado de x402 | **$15,0M en 109,6M transacciones = $0,14/petición** | Visa + Artemis, 2026-04-21 |
+| Volumen real diario de **todo** el protocolo | **~$28.000–$40.000** | CoinDesk / Major Matters |
+| Actividad artificial (autopago, *wash trading*) | **~50%** | Artemis Analytics |
+| Comercio real (Categoría 3) | **<5%** del volumen; el resto es señalización | Forkast |
+| Confianza del consumidor en que una IA compre sin verificación | **14%** | Product.ai, abril 2026 (n=1.463) |
+| A2A en Virtuals ACP, decodificado de los logs de Base | **12.345.880 memos acumulados, pero 21 el 2026-09-17** (base ~200/día) | [agenteconomy.to](https://agenteconomy.to/stats/virtuals-acp-activity) |
+
+**Cuidado con la banda de precio.** La media de $0,14 y la mediana de $0,01 son
+promedios de una distribución dominada por llamadas de *señalización* (el 52,5% de los
+pagos son de menos de un céntimo), no el precio de los servicios que facturan. En la
+lista de los 20 que más ingresan, **ninguno cobra $0,01**: cobran entre $1 y $3.000
+por operación. Los dos modelos que hoy funcionan:
+
+| Modelo | Ejemplo real | Números | Ingreso/día |
+|---|---|---|---|
+| Pocos clientes, ticket alto | `mcp.blocksize.info` (datos de mercado vía MCP) | 12 pagadores × $1.879 | ~$1.361 |
+| Muchos pagadores, ticket bajo | Nansen (analítica cripto) | 313 pagadores × 10.067 llamadas a $1,12 | ~$164 |
+
+Y el patrón que domina el catálogo: de 74.332 endpoints, 484 probados y **453
+responden**; el resto está muerto. Esa misma lista publica un *"wash hall of shame"*
+con servicios de más de $100.000 de volumen bruto cuyo **98,9%–100% sale de un solo
+pagador** (BlockRun.AI: $280.534 brutos, 98,9% de un pagador).
+
+**Lo que esto significa para este proyecto:** el cuello de botella no es el precio ni
+la falta de productos —es que la economía agéntica todavía no ha llegado—, pero
+tampoco está muerta: la x402 Foundation (Linux Foundation, 40 miembros: Visa,
+Mastercard, Stripe, Google, Coinbase) está poniendo la tubería. Mantener el servicio
+cuesta ~$1,43/mes, así que se mantiene como **opción sobre esa fase siguiente**, y lo
+que conviene resolver hoy es el **descubrimiento** (Smithery, registro MCP): es lo
+único que mueve la aguja del tráfico. El precio de $0,02 no es el obstáculo —un agente
+que paga $7 por una inferencia paga centavos por una limpieza sin pensarlo—; lo que
+falta es que ese agente **exista** y que la limpieza sea un paso de su flujo.
+
 ### Descubrimiento
 
 Construir los tres productos no sirve de nada si ningún agente de un tercero los
@@ -313,7 +368,10 @@ futura, no como el camino que se está siguiendo ahora:
 - App gratis para personas (`web/`): ya montada, pero es el embudo hacia la API,
   no un producto de pago aparte.
 - Cobro a empresas o despachos con tarjeta y factura (Stripe + CFDI): **aparcado**.
-  Tendría sentido el día que haya demanda real, no antes.
+  Tendría sentido el día que haya demanda real, no antes. (El mercado medido de
+  arriba apunta a que ese día puede llegar **antes** por aquí —clientes con
+  presupuesto y obligación de cumplir— que por el raíl agéntico, que hoy factura
+  ~$9.000/día en todo el mundo medido.)
 - Cuentas, créditos o un plan "Pro" tipo SaaS: **aparcado**, y además
   contradice la promesa de la app gratis (no sube nada, no hay servidor que
   gatear con un paywall).
