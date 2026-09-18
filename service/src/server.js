@@ -14,13 +14,12 @@ import { Hono } from 'hono';
 import { paymentMiddleware } from '@x402/hono';
 import { writeZip } from '../../web/zip.js';
 
-import { clean, BadRequest, UnsupportedFormat, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
+import { clean, assess, BadRequest, UnsupportedFormat, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
 import { loadConfig } from './config.js';
-import { buildResourceServer, buildRoutes } from './payments.js';
+import { buildResourceServer, buildRoutes, CLEAN_PATH, SCAN_PATH } from './payments.js';
 import { comprobarRegistro } from './ledger.js';
 import { esPrincipal } from './es-main.js';
 
-export const CLEAN_PATH = '/v1/clean';
 export const SERVICE_VERSION = '1.0.0';
 
 const FORMATOS = {
@@ -193,6 +192,15 @@ async function handleClean(c, config) {
   });
 }
 
+async function handleScan(c, config) {
+  const { files } = await readUpload(c, config);
+  const results = [];
+  for (const file of files) {
+    results.push(await assess(file.name, file.bytes));
+  }
+  return json({ ok: true, files: results });
+}
+
 
 /** Escapa texto que va a HTML (los valores vienen de la configuración). */
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -205,6 +213,7 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 function paginaHumana(config) {
   const app = config.publicAppUrl;
   const ejemplo = `${config.publicUrl || 'http://' + config.host + ':' + config.port}/v1/clean`;
+  const ejemploScan = `${config.publicUrl || 'http://' + config.host + ':' + config.port}/v1/scan`;
   const redes = config.networks.map((n) => `${n.network} (${n.payTo})`).join('<br>');
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
@@ -231,9 +240,11 @@ function paginaHumana(config) {
   de documentos de Office, PDF e imágenes, para programas y agentes. Sin cuenta y sin
   clave de API: se paga por petición.</p>
 
-  <p class="destacado"><b>Precio: ${esc(config.price)} por petición</b> — hasta
-  ${config.maxFiles} archivos y ${Math.round(config.maxRequestBytes / (1024 * 1024))} MB, no por
-  archivo. Si algún archivo no se puede procesar, la petición falla y <b>no se cobra</b>.</p>
+  <p class="destacado">Precio: <b>${esc(config.price)}</b> por limpiar metadatos
+  (<code>/v1/clean</code>) y <b>${esc(config.priceScan)}</b> por evaluar el riesgo de un
+  archivo sin limpiarlo (<code>/v1/scan</code>) — por petición, hasta ${config.maxFiles}
+  archivos y ${Math.round(config.maxRequestBytes / (1024 * 1024))} MB, no por archivo. Si
+  algún archivo no se puede procesar, la petición falla y <b>no se cobra</b>.</p>
 
   <h2>Cómo se cobra</h2>
   <p>Se usa el protocolo x402: pides el recurso sin pagar y recibes un
@@ -243,6 +254,10 @@ function paginaHumana(config) {
   <pre>curl -X POST ${esc(ejemplo)} \
   -H 'Accept: application/json' \
   -d '{"name":"foto.jpg","bytesBase64":"..."}'</pre>
+  <p class="muted">Para solo evaluar el riesgo sin limpiar nada (devuelve JSON siempre,
+  sin ZIP):</p>
+  <pre>curl -X POST ${esc(ejemploScan)} \
+  -d '{"name":"informe.xlsx","bytesBase64":"..."}'</pre>
   <p class="muted">Con <code>Accept: application/json</code> devuelve los archivos en base64;
   sin esa cabecera devuelve un ZIP con los archivos limpios y un <code>informe.json</code>
   (tamaños, hashes y qué se quitó). También acepta <code>multipart/form-data</code>.</p>
@@ -270,11 +285,11 @@ function paginaHumana(config) {
 export async function createApp(config, { resourceServer } = {}) {
   const app = new Hono();
   const server = resourceServer || await buildResourceServer(config);
-  const routes = buildRoutes(config, CLEAN_PATH);
+  const routes = buildRoutes(config);
 
   // Rechazo temprano de cuerpos enormes: nunca se cobra por esto.
   app.use('*', async (c, next) => {
-    if (c.req.method === 'POST' && c.req.path === CLEAN_PATH) {
+    if (c.req.method === 'POST' && (c.req.path === CLEAN_PATH || c.req.path === SCAN_PATH)) {
       const len = Number(c.req.header('content-length') || 0);
       if (len > config.maxRequestBytes) {
         return json({
@@ -300,6 +315,7 @@ export async function createApp(config, { resourceServer } = {}) {
       + 'con x402: el agente paga desde su propia cartera, sin cuentas ni claves de API.',
     protocolo: { nombre: 'x402', version: 2, cabeceraPago: 'PAYMENT-SIGNATURE', reto: 402 },
     precio: config.price,
+    precioScan: config.priceScan,
     redes: config.networks.map(({ network, family, payTo }) => ({ red: network, familia: family, cobrarA: payTo })),
     limites: {
       archivosPorPeticion: config.maxFiles,
@@ -310,6 +326,8 @@ export async function createApp(config, { resourceServer } = {}) {
       [`POST ${CLEAN_PATH}`]: 'multipart/form-data, campo "file" (repetible) y "options" (JSON opcional). '
         + 'Devuelve un ZIP con los archivos limpios y informe.json. '
         + 'Con "Accept: application/json" devuelve los archivos en base64 (necesario si no puedes leer binario).',
+      [`POST ${SCAN_PATH}`]: 'igual que /v1/clean pero sin "options"; no limpia nada, solo '
+        + 'evalúa el riesgo (macros, JavaScript, conexiones externas...) y devuelve JSON siempre, sin ZIP.',
       'GET /v1/pricing': 'precio, red y límites (gratis)',
       'GET /healthz': 'estado del servicio (gratis)',
     },
@@ -342,6 +360,7 @@ export async function createApp(config, { resourceServer } = {}) {
 
   app.get('/v1/pricing', (c) => json({
     precio: config.price,
+    precioScan: config.priceScan,
     por: 'petición (hasta '
       + `${config.maxFiles} archivos, ${Math.round(config.maxRequestBytes / (1024 * 1024))} MB)`,
     protocolo: 'x402',
@@ -369,6 +388,14 @@ export async function createApp(config, { resourceServer } = {}) {
   app.post(CLEAN_PATH, async (c) => {
     try {
       return await handleClean(c, config);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  });
+
+  app.post(SCAN_PATH, async (c) => {
+    try {
+      return await handleScan(c, config);
     } catch (err) {
       return errorResponse(err);
     }

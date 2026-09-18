@@ -18,7 +18,7 @@ import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 
 import { loadConfig } from './config.js';
-import { clean, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
+import { clean, assess, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
 import { aceptes, buildResourceServer } from './payments.js';
 import { esPrincipal } from './es-main.js';
 import { comprobarRegistro } from './ledger.js';
@@ -98,6 +98,42 @@ export async function buildServer(config = loadConfig()) {
     }),
   );
 
+  const acceptsRiesgo = await resourceServer.buildPaymentRequirementsFromOptions(
+    aceptes(config, config.priceScan), {},
+  );
+  const cobrarRiesgo = createPaymentWrapper(resourceServer, {
+    accepts: acceptsRiesgo,
+    resource: {
+      url: 'mcp://tool/evaluar_riesgo',
+      description: 'Evalúa si es prudente abrir un documento, PDF o imagen',
+      mimeType: 'application/json',
+      serviceName: config.serviceName,
+    },
+  });
+
+  server.tool(
+    'evaluar_riesgo',
+    `Evalúa si es prudente abrir o procesar un PDF, documento de Office o imagen: busca `
+    + `macros, JavaScript/acciones automáticas en PDF, conexiones a bases de datos, archivos `
+    + `incrustados y enlaces a otros archivos. No modifica nada, solo analiza. Cuesta `
+    + `${config.priceScan} por llamada (se puede pagar en `
+    + `${config.networks.map((n) => n.network).join(' o ')}), pagado con la cartera del `
+    + `agente (x402). No es un antivirus: mira la estructura del archivo, no el contenido `
+    + `del código. Si el archivo no se puede leer, la llamada falla y no se cobra.`,
+    {
+      nombre: z.string().describe('Nombre del archivo con su extensión, p.ej. "informe.xlsx"'),
+      bytesBase64: z.string().describe('Contenido del archivo en base64'),
+    },
+    cobrarRiesgo(async ({ nombre, bytesBase64 }) => {
+      const bytes = new Uint8Array(Buffer.from(bytesBase64, 'base64'));
+      if (bytes.length > config.maxFileBytes) {
+        return { isError: true, content: [{ type: 'text', text: `El archivo supera ${config.maxFileBytes} bytes.` }] };
+      }
+      const evaluacion = await assess(sanitizeFilename(nombre), bytes);
+      return { content: [{ type: 'text', text: JSON.stringify({ ok: true, ...evaluacion }) }] };
+    }),
+  );
+
   return server;
 }
 
@@ -113,7 +149,7 @@ if (esPrincipal(import.meta)) {
   await server.connect(new StdioServerTransport());
   if (config.ledgerFile) console.error(`[mcp-service] ${await comprobarRegistro(config.ledgerFile)}`);
   for (const { network, payTo } of config.networks) {
-    console.error(`[mcp-service] cobra ${config.price} por llamada en ${network} a ${payTo}`);
+    console.error(`[mcp-service] cobra ${config.price} (limpiar) / ${config.priceScan} (evaluar riesgo) por llamada en ${network} a ${payTo}`);
   }
   console.error(`[mcp-service] ajustes por defecto: ${JSON.stringify(DEFAULT_OPTIONS)}`);
 }

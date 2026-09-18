@@ -26,17 +26,25 @@ También funciona abriendo `web/index.html` directamente. Soporta varios archivo
 
 ### Qué cobra
 
-Precio por **petición** (no por archivo), hasta 10 archivos y 64 MB. Por defecto 0,02 USDC en Base. Se puede cobrar en varias redes a la vez: el agente elige con la cartera que tenga.
+Precio por **petición** (no por archivo), hasta 10 archivos y 64 MB. Dos productos, dos precios:
 
-**Si el trabajo falla, no se cobra.** El pago se liquida solo cuando la limpieza terminó bien.
+| Producto | Precio por defecto | Qué hace |
+|---|---|---|
+| `POST /v1/clean` | 0,02 USDC | Limpia los metadatos y devuelve los archivos |
+| `POST /v1/scan` | 0,01 USDC | Evalúa el riesgo de abrir un archivo, sin modificarlo |
+
+Se puede cobrar en varias redes a la vez: el agente elige con la cartera que tenga.
+
+**Si el trabajo falla, no se cobra.** El pago se liquida solo cuando el trabajo terminó bien.
 
 ### Endpoints
 
 | Método | Ruta | Pago | Qué devuelve |
 |---|---|---|---|
 | `POST` | `/v1/clean` | **sí** | ZIP con los archivos limpios + `informe.json` (o JSON en base64 con `Accept: application/json`) |
+| `POST` | `/v1/scan` | **sí** | JSON con un veredicto de riesgo por archivo (nunca ZIP; no modifica nada) |
 | `GET` | `/` | no | Descripción del servicio, formatos y cómo pagar |
-| `GET` | `/v1/pricing` | no | Precio, redes, direcciones de cobro y límites |
+| `GET` | `/v1/pricing` | no | Precio de cada producto, redes, direcciones de cobro y límites |
 | `GET` | `/healthz` | no | Estado |
 
 Formatos: PDF, Word (`.docx`/`.docm`), Excel (`.xlsx`/`.xlsm`), PowerPoint (`.pptx`/`.pptm`), JPEG, PNG y WebP. Las imágenes **no se recodifican**: los píxeles quedan idénticos. TIFF, HEIC y AVIF se rechazan (habría que recodificar) y los PDF cifrados también — en esos casos la petición falla **sin cobrar**.
@@ -60,6 +68,36 @@ Opciones de limpieza (todas opcionales, por defecto las mismas que la app):
  "customProps": true, "macros": true, "connections": true, "attachments": false}
 ```
 
+### `/v1/scan`: ¿es prudente abrir este archivo?
+
+Pregunta distinta de la limpieza: no es "qué datos personales lleva este archivo que
+voy a mandar" (eso es `/v1/clean`), es "¿debería tener cuidado con este archivo que
+acabo de recibir". No modifica nada, no reescribe el archivo: solo analiza y devuelve
+un veredicto. Reutiliza el mismo análisis que ya hace `/v1/clean` para saber qué
+quitar — no hay ningún parseo nuevo, es una capa de interpretación sobre esas señales.
+
+Detecta (cuando existen): macros incrustadas (VBA), JavaScript o acciones automáticas
+en PDF (`/OpenAction`, `/AA`), conexiones a bases de datos externas (pueden llevar
+usuario y contraseña), enlaces a otros archivos, tablas dinámicas u hojas ocultas con
+origen externo, y archivos incrustados dentro de un PDF.
+
+```bash
+curl -X POST https://tu-servicio/v1/scan \
+  -d '{"name":"informe.xlsx","bytesBase64":"..."}'
+```
+
+```json
+{"ok": true, "files": [{
+  "file": {"name": "informe.xlsx", "kind": "office", "format": "Excel", "bytesInput": 9473, "sha256Input": "…"},
+  "riesgo": "alto", "puntuacion": 75,
+  "hallazgos": [{"nivel": "alto", "titulo": "Conexión a una base de datos externa", "detalle": "…"}],
+  "recomendacion": "…"
+}]}
+```
+
+**No es un antivirus.** Mira la estructura del archivo (qué elementos trae), no el
+contenido del código: no analiza qué hace una macro, no tiene firmas de malware.
+
 ### Herramientas incluidas
 
 ```bash
@@ -68,7 +106,7 @@ npm run pagar -- <url> [archivo]   # paga a un servicio x402 desde una cartera l
 npm run cartera          # genera el par de carteras de prueba (pagadora + cobradora)
 npm run saldo -- 0x...   # saldo de USDC de una dirección, leído de la cadena
 npm run prueba:testnet   # circuito completo contra el facilitador real de testnet (no cuesta dinero)
-npm run mcp:sell         # expone la limpieza como herramienta MCP que cobra por llamada
+npm run mcp:sell         # expone limpiar_metadatos y evaluar_riesgo como herramientas MCP que cobran por llamada
 npm run mcp              # puente MCP que PAGA (para agentes sin cartera propia)
 ```
 
@@ -97,7 +135,8 @@ Lo único obligatorio es `X402_PAY_TO`: sin dirección de cobro el servicio no a
 | `X402_PAY_TO` | — | Dirección EVM de cobro (**obligatoria** si cobras en EVM) |
 | `X402_PAY_TO_SVM` | — | Dirección de Solana de cobro (**obligatoria** si cobras en Solana) |
 | `X402_NETWORKS` | `eip155:84532` | Redes separadas por comas: `eip155:8453` (Base), `solana:5eykt…` |
-| `X402_PRICE` | `0.02` | Precio por petición. **Sin `$`**: el cargador de `.env` de Bun expande `$0` y se pierde |
+| `X402_PRICE` | `0.02` | Precio de `/v1/clean` por petición. **Sin `$`**: el cargador de `.env` de Bun expande `$0` y se pierde |
+| `X402_PRICE_SCAN` | `0.01` | Precio de `/v1/scan` por petición (mismas reglas que `X402_PRICE`) |
 | `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | Quien verifica y liquida. Solo testnet; para mainnet, PayAI o CDP |
 | `X402_ASSET` / `X402_ASSET_MINT` | USDC | Cobrar en otro token. En EVM tiene que soportar EIP-3009 (USDC, PYUSD, USDP, FDUSD, USDT0). **El USDT clásico no lo soporta**; en Solana vale cualquier SPL |
 | `LEDGER_FILE` | vacío | Registro de ventas (una línea JSON por cobro, con tx y pagador). `off` para desactivarlo |
@@ -120,11 +159,12 @@ El `Dockerfile` se construye desde la **raíz** (no desde `service/`) porque el 
 cd service && npm run test:all
 ```
 
-**174 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
+**200 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
 
 | Fichero | Qué cubre |
 |---|---|
-| `test/e2e.js` | Reto 402 en dos redes, cobro, replay, pagos mal dirigidos, nombres peligrosos, registro de ventas, descubrimiento |
+| `test/e2e.js` | Reto 402 en dos redes, cobro, replay, pagos mal dirigidos, nombres peligrosos, registro de ventas, descubrimiento (`/v1/clean`) |
+| `test/e2e-scan.js` | `/v1/scan`: precio independiente, veredicto de riesgo en fixtures reales, sin cobro si el archivo no se puede leer |
 | `test/e2e-svm.js` | Pago en Solana con el cliente oficial |
 | `test/e2e-asset.js` | Cobrar con otro token (EVM y Solana) |
 | `test/preflight.js` | Los cinco motivos por los que NO debe dejar cobrar |
@@ -139,10 +179,11 @@ Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 
 | | |
 |---|---|
-| Limpieza, paywall, rechazos sin cobro, doble red, MCP, registro de ventas | **177 comprobaciones** (`npm run test:all`), sin red y sin dinero |
+| Limpieza, escáner de riesgo, paywall, rechazos sin cobro, doble red, MCP, registro de ventas | **200 comprobaciones** (`npm run test:all`), sin red y sin dinero |
+| `/v1/scan` en testnet real (Base Sepolia, facilitador PayAI) | pago liquidado y confirmado on-chain, precio independiente de `/v1/clean` |
 | Liquidación en testnet (Base Sepolia) | transacciones confirmadas y USDC de prueba en la cartera del cobrador |
 | Liquidación en **mainnet** (Base) | transacción confirmada, importe correcto, gas pagado por el facilitador |
-| Descubrimiento | el servicio aparece en el catálogo del facilitador tras el primer cobro (`npm run catalogado`) |
+| Descubrimiento | `/v1/clean` aparece en el catálogo del facilitador tras su primer cobro mainnet (`npm run catalogado`); `/v1/scan` se catalogará igual en su primera venta mainnet |
 
 Nota sobre el catálogo: el buscador del facilitador no filtra por texto (devuelve
 lo mismo para cualquier consulta); aparece en el listado de recursos.
@@ -162,6 +203,14 @@ punta a punta: venta real en mainnet, liquidación en cadena, catalogado automá
 en el directorio de descubrimiento (`npm run catalogado`), sin que intervenga
 ninguna persona ni ninguna tarjeta de crédito.
 
+La forma de seguir probando esa tesis, ahora que `/v1/clean` ya está en producción,
+es **más microservicios para agentes** — no más productos para personas. El criterio
+para elegir cuál construir: algo que un agente no puede hacer bien por sí mismo (no
+tiene el parseo, no quiere mantenerlo) o que le sale más barato pagar por llamada que
+montarlo. `/v1/scan` (evaluar el riesgo de abrir un archivo, §"Endpoints") es el
+primero: reutiliza el mismo motor de análisis de `/v1/clean`, así que fue una
+extensión barata y de bajo riesgo, no un proyecto nuevo.
+
 **Esto es lo prioritario.** Lo demás queda anotado como posible implementación
 futura, no como el camino que se está siguiendo ahora:
 
@@ -177,6 +226,7 @@ futura, no como el camino que se está siguiendo ahora:
 
 ```
 web/                     app del navegador (el motor de limpieza: pdf.js, images.js, ooxml.js, zip.js)
+web/risk.js              evalúa el riesgo a partir del mismo análisis (lo usa /v1/scan)
 service/src/core.js      el mismo motor, en el servidor
 service/src/dom.js       shim DOMParser/XMLSerializer para correr OOXML fuera del navegador
 service/src/payments.js  cableado x402: redes, esquemas, descubrimiento

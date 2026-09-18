@@ -52,10 +52,11 @@ export function registrarVentas(server, config) {
   };
 
   return server
-    .onAfterSettle(({ requirements, result }) => {
+    .onAfterSettle(({ requirements, result, paymentPayload }) => {
       escribir({
         resultado: 'liquidado',
         servicio: config.serviceName,
+        recurso: paymentPayload?.resource?.url || null,
         red: result.network || requirements.network,
         importe: `${result.amount || requirements.amount} (unidades base)`,
         token: requirements.asset,
@@ -64,10 +65,11 @@ export function registrarVentas(server, config) {
         tx: result.transaction,
       });
     })
-    .onSettleFailure(({ requirements, error }) => {
+    .onSettleFailure(({ requirements, error, paymentPayload }) => {
       escribir({
         resultado: 'fallo_de_liquidacion',
         servicio: config.serviceName,
+        recurso: paymentPayload?.resource?.url || null,
         red: requirements.network,
         importe: `${requirements.amount} (unidades base)`,
         token: requirements.asset,

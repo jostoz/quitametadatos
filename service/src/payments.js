@@ -24,11 +24,14 @@ async function makeAuthHeaders(modulePath) {
   return mod.createAuthHeaders;
 }
 
-/** Opciones de pago: una por red configurada (el agente elige la suya). */
-export function aceptes(config) {
+export const CLEAN_PATH = '/v1/clean';
+export const SCAN_PATH = '/v1/scan';
+
+/** Opciones de pago: una por red configurada, al precio del producto que se pida. */
+export function aceptes(config, price = config.price) {
   return config.networks.map(({ scheme, network, payTo }) => ({
     scheme,
-    price: config.price,
+    price,
     network,
     payTo,
   }));
@@ -70,11 +73,11 @@ export async function buildResourceServer(config) {
 }
 
 /**
- * Metadatos de descubrimiento (extensión bazaar): con esto los directorios de
- * x402 pueden catalogar el endpoint y un agente puede encontrar el servicio
- * sabiendo qué recibe y qué devuelve, sin leerse el código.
+ * Metadatos de descubrimiento (extensión bazaar) de /v1/clean: con esto los
+ * directorios de x402 pueden catalogar el endpoint y un agente puede
+ * encontrar el servicio sabiendo qué recibe y qué devuelve, sin leerse el código.
  */
-export function descubrimiento(config) {
+export function descubrimientoLimpieza(config) {
   return declareDiscoveryExtension({
     method: 'POST',
     bodyType: 'json',
@@ -107,12 +110,47 @@ export function descubrimiento(config) {
   });
 }
 
-/** Rutas HTTP protegidas: el precio y las redes aceptadas de /v1/clean. */
-export function buildRoutes(config, path) {
+/** Metadatos de descubrimiento (extensión bazaar) de /v1/scan. */
+export function descubrimientoRiesgo(config) {
+  return declareDiscoveryExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: { name: 'informe.xlsx', bytesBase64: '<contenido del archivo en base64>' },
+    inputSchema: {
+      properties: {
+        name: { type: 'string', description: 'Nombre del archivo con su extensión' },
+        bytesBase64: { type: 'string', description: 'Contenido del archivo en base64' },
+      },
+      required: ['name', 'bytesBase64'],
+    },
+    output: {
+      example: {
+        ok: true,
+        files: [{
+          file: {
+            name: 'informe.xlsx', kind: 'office', format: 'Excel',
+            bytesInput: 9473, sha256Input: '…',
+          },
+          riesgo: 'alto',
+          puntuacion: 75,
+          hallazgos: [{
+            nivel: 'alto',
+            titulo: 'Conexión a una base de datos externa',
+            detalle: 'La cadena de conexión puede incluir usuario y contraseña en texto plano.',
+          }],
+          recomendacion: '…',
+        }],
+      },
+    },
+  });
+}
+
+/** Rutas HTTP protegidas: precio, redes y descubrimiento de cada producto. */
+export function buildRoutes(config) {
   const redes = config.networks.map((n) => n.network);
   return {
-    [`POST ${path}`]: {
-      accepts: aceptes(config),
+    [`POST ${CLEAN_PATH}`]: {
+      accepts: aceptes(config, config.price),
       description: `Quitar los metadatos de hasta ${config.maxFiles} archivos `
         + '(PDF, Word, Excel, PowerPoint, JPEG, PNG, WebP) y devolver un ZIP con los '
         + 'archivos limpios y un informe.json. Precio por petición, no por archivo. '
@@ -120,7 +158,19 @@ export function buildRoutes(config, path) {
         + 'corresponda a la cartera de tu agente. '
         + 'Si algún archivo no se puede procesar, la petición falla y NO se cobra.',
       mimeType: 'application/zip',
-      extensions: descubrimiento(config),
+      extensions: descubrimientoLimpieza(config),
+    },
+    [`POST ${SCAN_PATH}`]: {
+      accepts: aceptes(config, config.priceScan),
+      description: `Evaluar si es prudente abrir o procesar hasta ${config.maxFiles} archivos: `
+        + 'busca macros, JavaScript o acciones automáticas en PDF, conexiones a bases de datos, '
+        + 'archivos incrustados y enlaces a otros archivos. No modifica nada: solo analiza y '
+        + 'devuelve un veredicto (alto/medio/bajo) en JSON, sin ZIP. No es un antivirus: mira la '
+        + 'estructura del archivo, no el contenido del código. '
+        + `Se puede pagar en ${redes.join(' o ')}. `
+        + 'Si algún archivo no se puede leer, la petición falla y NO se cobra.',
+      mimeType: 'application/json',
+      extensions: descubrimientoRiesgo(config),
     },
   };
 }

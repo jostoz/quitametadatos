@@ -63,7 +63,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nServicio: ${config.serviceName} · ${config.price} por petición`);
+  console.log(`\nServicio: ${config.serviceName} · limpiar ${config.price} · evaluar riesgo ${config.priceScan}`);
   console.log(`Facilitador: ${config.facilitatorUrl}`);
 
   const server = await buildResourceServer(config);

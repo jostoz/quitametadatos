@@ -19,6 +19,7 @@ import { ledgerFile } from './ledger.js';
 export const DEFAULTS = Object.freeze({
   network: 'eip155:84532', // Base Sepolia (pruebas con USDC de faucet)
   price: '$0.02',
+  priceScan: '$0.01',
   facilitatorUrl: 'https://x402.org/facilitator',
   host: '127.0.0.1',
   port: 8402,
@@ -152,14 +153,19 @@ export function loadConfig(env = process.env) {
     networks.push({ network, family, payTo: normalizarPago(family, raw), scheme: 'exact' });
   }
 
-  const price = (env.X402_PRICE || DEFAULTS.price).trim();
-  if (!/^\$?\d+(\.\d+)?$/.test(price)) {
-    const pista = price.startsWith('.')
-      ? ' Parece que escribiste "$0.02" en el .env: el cargador de .env de Bun expande "$0" y se pierde. '
-        + 'Escribe el precio sin dólar: X402_PRICE=0.02'
-      : '';
-    throw new ConfigError(`X402_PRICE debe ser un importe en dólares, p.ej. 0.02 (recibido "${price}").${pista}`);
-  }
+  const precio = (raw, nombreVar) => {
+    const p = (raw || '').trim();
+    if (!/^\$?\d+(\.\d+)?$/.test(p)) {
+      const pista = p.startsWith('.')
+        ? ` Parece que escribiste "$0.02" en el .env: el cargador de .env de Bun expande "$0" y se pierde. `
+          + `Escribe el precio sin dólar: ${nombreVar}=0.02`
+        : '';
+      throw new ConfigError(`${nombreVar} debe ser un importe en dólares, p.ej. 0.02 (recibido "${p}").${pista}`);
+    }
+    return p.startsWith('$') ? p : `$${p}`;
+  };
+  const price = precio(env.X402_PRICE || DEFAULTS.price, 'X402_PRICE');
+  const priceScan = precio(env.X402_PRICE_SCAN || DEFAULTS.priceScan, 'X402_PRICE_SCAN');
 
   return {
     networks,
@@ -167,7 +173,8 @@ export function loadConfig(env = process.env) {
     // Red principal (la primera): la usan los mensajes y el MCP.
     network: networks[0].network,
     payTo: networks[0].payTo,
-    price: price.startsWith('$') ? price : `$${price}`,
+    price,
+    priceScan,
     facilitatorUrl: (env.X402_FACILITATOR_URL || DEFAULTS.facilitatorUrl).trim(),
     facilitatorAuthModule: (env.X402_FACILITATOR_AUTH_MODULE || '').trim() || null,
     // Si se define, el reto 402 lleva un blockhash reciente de Solana y el

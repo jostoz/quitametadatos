@@ -9,6 +9,7 @@ import './dom.js';
 import { sniffPdf, inspectPdf, stripPdf } from '../../web/pdf.js';
 import { sniff, inspectImage, stripImage } from '../../web/images.js';
 import { readZip, inspect, strip } from '../../web/ooxml.js';
+import { assessRisk } from '../../web/risk.js';
 import { createHash } from 'node:crypto';
 
 // Mismos valores por defecto que la interfaz web (web/index.html): quitar
@@ -116,6 +117,39 @@ function kindLabel(kind, report) {
   if (kind === 'image') return (report.info.format || 'imagen').toUpperCase();
   if (kind === 'pdf') return 'PDF';
   return report.info.formatLabel;
+}
+/**
+ * Evalúa el riesgo de un archivo sin limpiarlo: no reescribe nada, así que es
+ * más barato y funciona incluso con formatos que no se pueden limpiar (p.ej.
+ * un PDF cifrado: no se puede reescribir, pero sí se puede avisar de que está
+ * cifrado). Reutiliza el mismo analyze() que usa clean().
+ * @returns {Promise<object>} archivo + veredicto de assessRisk()
+ */
+export async function assess(name, input) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (!bytes.length) throw new BadRequest(`"${name}" está vacío.`);
+
+  let kind;
+  let report;
+  try {
+    ({ kind, report } = await analyze(bytes));
+  } catch (err) {
+    throw new UnsupportedFormat(
+      `No se puede procesar "${name}": ${err.message}`,
+      { kind: null, format: null, findings: [], info: {} },
+    );
+  }
+
+  return {
+    file: {
+      name,
+      kind,
+      format: kindLabel(kind, report),
+      bytesInput: bytes.length,
+      sha256Input: sha256(bytes),
+    },
+    ...assessRisk(kind, report),
+  };
 }
 
 /**
