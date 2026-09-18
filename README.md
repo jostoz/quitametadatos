@@ -378,7 +378,9 @@ futura, no como el camino que se está siguiendo ahora:
   Tendría sentido el día que haya demanda real, no antes. (El mercado medido de
   arriba apunta a que ese día puede llegar **antes** por aquí —clientes con
   presupuesto y obligación de cumplir— que por el raíl agéntico, que hoy factura
-  ~$9.000/día en todo el mundo medido.)
+  ~$9.000/día en todo el mundo medido.) Ya hay una primera página para esa
+  conversación: [la one-pager para despachos](https://quitametadatos-b2b.vercel.app)
+  (`web/b2b.html`).
 - Cuentas, créditos o un plan "Pro" tipo SaaS: **aparcado**, y además
   contradice la promesa de la app gratis (no sube nada, no hay servidor que
   gatear con un paywall).
@@ -390,6 +392,7 @@ web/                     app del navegador (el motor de limpieza: pdf.js, images
 web/risk.js              evalúa el riesgo a partir del mismo análisis (lo usa /v1/scan)
 web/secrets.js           detecta credenciales expuestas en texto/código (lo usa /v1/secrets)
 web/veredicto.js         puntuación y umbrales compartidos por risk.js y secrets.js
+web/b2b.html + b2b.css   la página para despachos (vive en https://quitametadatos-b2b.vercel.app)
 service/src/core.js      el mismo motor, en el servidor
 service/src/dom.js       shim DOMParser/XMLSerializer para correr OOXML fuera del navegador
 service/src/payments.js  cableado x402: redes, esquemas, descubrimiento

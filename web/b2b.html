@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expedientes sin datos personales que sobran — para despachos</title>
+<meta name="description" content="Antes de compartir un expediente, detecta y quita los datos personales que no deben salir (CURP, RFC, NSS, CLABE) y deja un informe firmado que prueba que se hizo.">
+<meta name="theme-color" content="#0f1115">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="b2b.css">
+</head>
+<body>
+<header>
+  <p class="kicker">Para despachos de abogados</p>
+  <h1>El expediente sale solo con lo que debe salir</h1>
+  <p class="lead">Antes de compartirlo, un archivo lleva más de lo que crees: CURP y RFC
+  de los socios, números de seguridad social, cuentas CLABE, direcciones, fechas.
+  Esto los encuentra, los quita, y te deja un <b>informe firmado</b> que demuestra
+  que tomaste medidas.</p>
+  <ul class="trust">
+    <li>El archivo <b>no se sube a ningún servidor</b>: se procesa en tu equipo</li>
+    <li>Nada de IA ni de reglas difusas: detección determinista y explicable</li>
+    <li>Un certificado que puedes enseñar si un día hay una filtración</li>
+  </ul>
+  <p class="cta">
+    <a class="boton" href="mailto:jostoztado@gmail.com?subject=Piloto%20de%20expedientes%20limpios">Hablemos: piloto con tus propios documentos</a>
+  </p>
+</header>
+
+<main>
+  <section class="card" id="problema">
+    <h2>El problema no es que el expediente tenga datos. Es que no los veas.</h2>
+    <p>Un expediente de un despacho no es un documento: es un conjunto de
+    identificaciones, actas, poderes y estados de cuenta que se reutilizan una y otra
+    vez. Cuando lo compartes —con la contraparte, un perito, una notaría o un
+    tercero— compartes también lo que ese tercero <b>no</b> necesitaba.</p>
+    <div class="rejilla">
+      <div class="mini"><h3>CURP y RFC de los socios</h3><p>Los pides para el KYC. No tienen por qué viajar en el anexo que mandas.</p></div>
+      <div class="mini"><h3>Metadatos del archivo</h3><p>Autor, empresa, fechas y ubicación GPS de una foto, incrustados en el propio archivo.</p></div>
+      <div class="mini"><h3>Lo que alguien creyó haber borrado</h3><p>Comentarios, cambios controlados o una versión anterior que sigue dentro del PDF.</p></div>
+    </div>
+  </section>
+
+  <section class="card" id="legal">
+    <h2>La ley ya lo espera de ti</h2>
+    <p class="nota">La nueva <b>LFPDPPP</b> (en vigor desde marzo de 2025) te obliga, como
+    responsable de datos personales, a limitar lo que compartes a lo necesario para la
+    finalidad — y a tomar <b>medidas de seguridad</b>. Las sanciones se calculan en UMA y
+    se duplican cuando hay datos sensibles.</p>
+    <div class="rejilla">
+      <div class="mini"><h3>Proporcionalidad</h3><p>Solo los datos necesarios para la finalidad. Lo demás, fuera.</p></div>
+      <div class="mini"><h3>Control de transferencias</h3><p>Compartir datos de terceros es una transferencia con requisitos.</p></div>
+      <div class="mini"><h3>Secreto profesional</h3><p>El expediente no se puede subir a un servidor ajeno. Por eso el archivo no sale de tu equipo.</p></div>
+    </div>
+    <p class="muted">Esto no es asesoría legal: es la parte técnica de cumplir. Tu abogado decide el resto.</p>
+  </section>
+
+  <section class="card" id="que-hace">
+    <h2>Qué hace, en tres pasos</h2>
+    <div class="pasos">
+      <div class="paso"><span class="n">1</span><div><h3>Detecta</h3><p>Encuentra CURP, RFC, NSS, CLABE, teléfonos y metadatos. CURP y RFC se validan con su <b>dígito verificador</b>: no es una búsqueda de texto, es comprobar que el identificador es real.</p></div></div>
+      <div class="paso"><span class="n">2</span><div><h3>Quita</h3><p>Reescribe el documento sin recodificar: el contenido visible queda idéntico. Solo desaparece lo que no debe salir.</p></div></div>
+      <div class="paso"><span class="n">3</span><div><h3>Certifica</h3><p>Un informe firmado con el hash del original y del resultado, la fecha y la lista de lo que se quitó. La prueba, en tu archivo, no en una nube.</p></div></div>
+    </div>
+  </section>
+
+  <section class="card" id="piloto">
+    <h2>Empieza con un piloto, no con un proyecto</h2>
+    <p>Traes un expediente real —uno que te preocupe— y lo pasamos juntos. Tú ves qué
+    encuentra, qué quita y cómo queda el informe. Si no te dice nada nuevo, te vas con
+    el expediente limpio y no me debes nada.</p>
+    <p class="cta">
+      <a class="boton" href="mailto:jostoztado@gmail.com?subject=Piloto%20de%20expedientes%20limpios&body=Cuento%20con%20un%20expediente%20para%20probarlo.">Solicitar el piloto</a>
+      <span class="muted">Sin tarjeta. Sin subir nada. Sin permanencia.</span>
+    </p>
+  </section>
+</main>
+
+<footer>
+  <p>Un producto de <b>quitametadatos</b> — el mismo motor de limpieza, en tu equipo.</p>
+  <p class="muted">¿Prefieres probarlo tú solo primero? <a href="https://quitametadatos.up.railway.app">La versión gratis para personas</a> procesa un archivo aquí mismo, sin subirlo.</p>
+</footer>
+</body>
+</html>
