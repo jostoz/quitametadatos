@@ -69,6 +69,7 @@ const registroVentas = join(tmpdir(), `ventas-e2e-${Date.now()}.jsonl`);
 const config = loadConfig({
   LEDGER_FILE: registroVentas,
   PUBLIC_URL: 'https://servicio.example.com',
+  PUBLIC_APP_URL: 'https://app.example.com',
   X402_NETWORKS: `eip155:84532,${RED_SVM}`,
   X402_PAY_TO: merchant.address,
   X402_PAY_TO_SVM: svmCobrador,
@@ -432,6 +433,18 @@ try {
   check('sin X402_PAY_TO_SVM la configuración falla con un error claro',
     falloConfig instanceof ConfigError && /X402_PAY_TO_SVM/.test(falloConfig.message),
     falloConfig?.message);
+  const comoNavegador = await fetch(`${url}/`, { headers: { Accept: 'text/html,application/xhtml+xml' } });
+  const html = await comoNavegador.text();
+  check('un navegador recibe una página, no un JSON',
+    (comoNavegador.headers.get('content-type') || '').includes('text/html')
+    && html.includes('<h1>') && /Precio:/.test(html),
+    (comoNavegador.headers.get('content-type') || '') + ' · ' + html.slice(0, 60));
+  check('la página dice el precio y enlaza la app gratis',
+    html.includes('$0.02') && html.includes('https://app.example.com'),
+    html.includes('$0.02') ? 'precio sí' : 'falta el precio');
+  check('y un agente sigue recibiendo JSON',
+    (await (await fetch(`${url}/`, { headers: { Accept: 'application/json' } })).json()).precio === '$0.02');
+
   const sano = await (await fetch(`${url}/healthz`)).json();
   check('GET /healthz responde ok', sano.ok === true);
   const antesInvalidas = facilitator.calls.settle.length;

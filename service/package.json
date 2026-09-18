@@ -5,6 +5,7 @@
   "type": "module",
   "description": "API de limpieza de metadatos con cobro x402, para agentes de IA",
   "scripts": {
+    "catalogado": "bun run src/catalogado.js",
     "pagar": "bun run src/pagar.js",
     "saldo": "bun run src/saldo.js",
     "cartera": "bun run src/nueva-cartera.js",

@@ -183,6 +183,8 @@ export function loadConfig(env = process.env) {
     // Ruta del registro de ventas, o null si está desactivado (LEDGER_FILE=off).
     ledgerFile: ledgerFile(env),
     publicUrl: (env.PUBLIC_URL || '').trim() || null,
+    // La app del navegador (gratis), para enlazarla desde la API.
+    publicAppUrl: (env.PUBLIC_APP_URL || '').trim() || null,
   };
 }
 

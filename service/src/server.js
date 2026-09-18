@@ -193,6 +193,78 @@ async function handleClean(c, config) {
   });
 }
 
+
+/** Escapa texto que va a HTML (los valores vienen de la configuración). */
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/**
+ * Página para quien abre la dirección en un navegador (no para agentes). Un
+ * agente pide JSON y sigue recibiendo JSON: se decide por la cabecera Accept.
+ * Sin recursos externos ni JavaScript: es un texto y ya.
+ */
+function paginaHumana(config) {
+  const app = config.publicAppUrl;
+  const ejemplo = `${config.publicUrl || 'http://' + config.host + ':' + config.port}/v1/clean`;
+  const redes = config.networks.map((n) => `${n.network} (${n.payTo})`).join('<br>');
+  return `<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(config.serviceName)} — limpiar metadatos por API</title>
+<style>
+  :root { color-scheme: dark }
+  body { margin: 0; background: #0f1115; color: #e7eaf0; font: 16px/1.6 "Segoe UI", system-ui, sans-serif }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 20px 64px }
+  h1 { font-size: 1.6rem; margin: 0 0 6px }
+  h2 { font-size: 1.05rem; margin: 32px 0 10px }
+  p, li { color: #c9d1dd }
+  .muted { color: #98a2b3; font-size: .9rem }
+  code, pre { background: #171a21; border: 1px solid #262b35; border-radius: 8px }
+  code { padding: 2px 6px; font-size: .88rem }
+  pre { padding: 14px; overflow-x: auto; font-size: .85rem }
+  a { color: #3d84f7 }
+  ul { padding-left: 20px }
+  .destacado { border-left: 3px solid #3d84f7; padding-left: 14px; margin: 18px 0 }
+</style></head>
+<body><main>
+  <h1>${esc(config.serviceName)}</h1>
+  <p class="muted">Quita los metadatos (autor, empresa, GPS, fechas, comentarios, macros)
+  de documentos de Office, PDF e imágenes, para programas y agentes. Sin cuenta y sin
+  clave de API: se paga por petición.</p>
+
+  <p class="destacado"><b>Precio: ${esc(config.price)} por petición</b> — hasta
+  ${config.maxFiles} archivos y ${Math.round(config.maxRequestBytes / (1024 * 1024))} MB, no por
+  archivo. Si algún archivo no se puede procesar, la petición falla y <b>no se cobra</b>.</p>
+
+  <h2>Cómo se cobra</h2>
+  <p>Se usa el protocolo x402: pides el recurso sin pagar y recibes un
+  <code>402</code> con los requisitos. Firmas con la cartera de tu agente y repites la
+  petición; el gas lo paga el facilitador, así que solo necesitas USDC.</p>
+  <p class="muted">Cobramos en:<br>${redes}</p>
+  <pre>curl -X POST ${esc(ejemplo)} \
+  -H 'Accept: application/json' \
+  -d '{"name":"foto.jpg","bytesBase64":"..."}'</pre>
+  <p class="muted">Con <code>Accept: application/json</code> devuelve los archivos en base64;
+  sin esa cabecera devuelve un ZIP con los archivos limpios y un <code>informe.json</code>
+  (tamaños, hashes y qué se quitó). También acepta <code>multipart/form-data</code>.</p>
+
+  <h2>Qué formatos</h2>
+  <ul>
+    <li>PDF, Word (.docx/.docm), Excel (.xlsx/.xlsm), PowerPoint (.pptx/.pptm)</li>
+    <li>JPEG, PNG y WebP, sin recodificar: los píxeles quedan idénticos</li>
+    <li class="muted">No se pueden limpiar TIFF, HEIC ni AVIF (habría que recodificar) ni PDF cifrados</li>
+  </ul>
+
+  ${app ? `<h2>¿Eres una persona?</h2>
+  <p>La misma limpieza existe como aplicación en tu navegador, gratis y sin subir nada a
+  ningún servidor: <a href="${esc(app)}">${esc(app)}</a></p>` : ''}
+
+  <h2>Para máquinas</h2>
+  <p class="muted">Esta dirección devuelve JSON si la pides con
+  <code>Accept: application/json</code>, y hay endpoints de descubrimiento en
+  <a href="/v1/pricing">/v1/pricing</a> y <a href="/healthz">/healthz</a>.</p>
+</main></body></html>`;
+}
+
 // ------------------------------------------------------------------ app
 
 export async function createApp(config, { resourceServer } = {}) {
@@ -215,7 +287,13 @@ export async function createApp(config, { resourceServer } = {}) {
 
   app.use('*', paymentMiddleware(routes, server));
 
-  app.get('/', (c) => json({
+  app.get('/', (c) => {
+    // Un navegador pide text/html; un agente pide JSON (o no pide nada concreto).
+    const acepta = c.req.header('accept') || '';
+    if (acepta.includes('text/html') && !acepta.startsWith('application/json')) {
+      return c.html(paginaHumana(config));
+    }
+    return json({
     servicio: config.serviceName,
     version: SERVICE_VERSION,
     descripcion: 'Quita los metadatos de documentos, PDF e imágenes. Cobra por petición '
@@ -259,7 +337,8 @@ export async function createApp(config, { resourceServer } = {}) {
       attachments: 'booleano',
       porDefecto: DEFAULT_OPTIONS,
     },
-  }));
+  });
+});
 
   app.get('/v1/pricing', (c) => json({
     precio: config.price,
