@@ -147,8 +147,31 @@ Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 Nota sobre el catálogo: el buscador del facilitador no filtra por texto (devuelve
 lo mismo para cualquier consulta); aparece en el listado de recursos.
 
-Lo que queda es de negocio, no de código: precio, promoción y, para empresas, cobro
-con tarjeta y factura (Stripe + CFDI).
+Lo que queda de aquí en adelante es sobre todo negocio, no código: precio, promoción,
+y decidir si se persigue el plan de empresas de la siguiente sección.
+
+## Tesis y hoja de ruta
+
+La apuesta de este proyecto no es "vender limpieza de metadatos a personas": es
+probar que **va a haber una economía de agente a agente**, y que se puede cobrar por
+ella. La razón de fondo: los agentes de IA van a ser generalistas —no van a
+reescribir un limpiador de OOXML/EXIF/PDF cada vez que lo necesiten— y para la
+mayoría, pagar unos centavos por una herramienta especializada y ya probada sale
+más barato que montarla ellos mismos. Eso es justo lo que ya está demostrado de
+punta a punta: venta real en mainnet, liquidación en cadena, catalogado automático
+en el directorio de descubrimiento (`npm run catalogado`), sin que intervenga
+ninguna persona ni ninguna tarjeta de crédito.
+
+**Esto es lo prioritario.** Lo demás queda anotado como posible implementación
+futura, no como el camino que se está siguiendo ahora:
+
+- App gratis para personas (`web/`): ya montada, pero es el embudo hacia la API,
+  no un producto de pago aparte.
+- Cobro a empresas o despachos con tarjeta y factura (Stripe + CFDI): **aparcado**.
+  Tendría sentido el día que haya demanda real, no antes.
+- Cuentas, créditos o un plan "Pro" tipo SaaS: **aparcado**, y además
+  contradice la promesa de la app gratis (no sube nada, no hay servidor que
+  gatear con un paywall).
 
 ## Estructura
 

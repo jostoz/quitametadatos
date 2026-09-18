@@ -141,17 +141,20 @@ function renderItems() {
   for (const item of state.items) {
     const li = document.createElement('li');
     li.className = 'item';
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = kindLabel(item);
     const name = document.createElement('span');
     name.className = 'item-name';
     name.textContent = item.file.name;
     const meta = document.createElement('span');
     meta.className = 'muted';
     const personal = item.report.findings.filter((f) => f.sev === 'personal');
-    const bits = [`${kindLabel(item)}`, humanSize(item.file.size)];
+    const bits = [humanSize(item.file.size)];
     bits.push(personal.length ? `${personal.length} datos personales` : 'sin datos personales');
     if (item.report.supported === false) bits.push('solo informe');
     meta.textContent = ` · ${bits.join(' · ')}`;
-    li.append(name, meta);
+    li.append(badge, name, meta);
     if (personal.length) {
       const detail = document.createElement('div');
       detail.className = 'muted indent';
@@ -174,12 +177,31 @@ function renderReport(item, detailed) {
     if (!groups.has(f.group)) groups.set(f.group, []);
     groups.get(f.group).push(f);
   }
+
+  const total = item.report.findings.length;
+  const personalCount = item.report.findings.filter((f) => f.sev === 'personal').length;
+  renderStats($('reportStats'), [
+    { label: 'Tipo', value: kindLabel(item) },
+    { label: 'Tamaño', value: humanSize(item.file.size) },
+    { label: 'Metadatos', value: String(total) },
+    { label: 'Datos personales', value: String(personalCount), personal: personalCount > 0 },
+  ]);
+
   for (const [group, items] of groups) {
-    const section = document.createElement('div');
-    section.className = 'group';
-    const h = document.createElement('h3');
-    h.textContent = group;
-    section.appendChild(h);
+    const details = document.createElement('details');
+    details.className = 'group';
+    // Los grupos con datos personales quedan abiertos; el resto (más técnicos,
+    // a veces con muchas filas de EXIF) se ven al abrirlos, no de entrada.
+    details.open = items.some((f) => f.sev === 'personal') || items.length <= 4;
+    const summary = document.createElement('summary');
+    summary.textContent = group;
+    const count = document.createElement('span');
+    count.className = 'group-count';
+    count.textContent = items.length;
+    summary.appendChild(count);
+    details.appendChild(summary);
+    const rows = document.createElement('div');
+    rows.className = 'group-rows';
     for (const entry of items) {
       const row = document.createElement('div');
       row.className = 'row sev-' + entry.sev;
@@ -192,14 +214,32 @@ function renderReport(item, detailed) {
       value.className = 'value';
       value.textContent = entry.value;
       row.append(label, value);
-      section.appendChild(row);
+      rows.appendChild(row);
     }
-    wrap.appendChild(section);
+    details.appendChild(rows);
+    wrap.appendChild(details);
   }
   $('reportSummary').textContent = summaryFor(item);
   $('reportTitle').textContent = detailed
     ? 'Qué información personal encontramos'
     : `Informe detallado: ${item.file.name}`;
+}
+
+/** Rellena la fila de tarjetas de estadísticas (tipo, tamaño, metadatos...). */
+function renderStats(wrap, stats) {
+  wrap.textContent = '';
+  for (const s of stats) {
+    const box = document.createElement('div');
+    box.className = 'stat' + (s.personal ? ' stat-personal' : '');
+    const label = document.createElement('p');
+    label.className = 'stat-label';
+    label.textContent = s.label;
+    const value = document.createElement('p');
+    value.className = 'stat-value';
+    value.textContent = s.value;
+    box.append(label, value);
+    wrap.appendChild(box);
+  }
 }
 
 function summaryFor(item) {
@@ -391,6 +431,11 @@ async function clean() {
         list.appendChild(li);
       }
     }
+    const removedTotal = list.querySelectorAll('li:not(.fail)').length;
+    $('resultStat').textContent = removedTotal
+      ? `${removedTotal} elemento${removedTotal === 1 ? '' : 's'} eliminado${removedTotal === 1 ? '' : 's'}`
+      : (failed.length ? 'No se pudo limpiar nada' : 'Archivo limpio, sin nada que quitar');
+    $('removedCount').textContent = String(list.children.length);
     renderPending();
     $('resultCard').hidden = false;
     $('resultCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });

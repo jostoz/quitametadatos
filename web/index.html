@@ -28,6 +28,13 @@
   <section class="card" id="load">
     <div class="drop" id="drop" tabindex="0" role="button"
          aria-label="Elegir archivos">
+      <span class="drop-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 16V4M12 4 7 9M12 4l5 5"/>
+          <path d="M5 16v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/>
+        </svg>
+      </span>
       <strong>Arrastra aquí tus archivos</strong>
       <span>o</span>
       <button type="button" id="pick">Elegir archivos</button>
@@ -51,6 +58,7 @@
   <section class="card" id="reportCard" hidden>
     <h2 id="reportTitle">Qué información personal encontramos</h2>
     <p class="muted" id="reportSummary"></p>
+    <div id="reportStats" class="stats"></div>
     <div id="report" class="report"></div>
   </section>
 
@@ -132,9 +140,18 @@
   </section>
 
   <section class="card" id="resultCard" hidden>
-    <h2>Listo</h2>
+    <div class="success-banner">
+      <span class="success-check" aria-hidden="true">&#10003;</span>
+      <div>
+        <h2>Listo</h2>
+        <p class="success-stat" id="resultStat"></p>
+      </div>
+    </div>
     <p class="fileline"><span id="outName"></span> <span class="muted" id="outSize"></span></p>
-    <ul id="removed" class="removed"></ul>
+    <details class="removed-details" open>
+      <summary>Qué se quitó <span class="group-count" id="removedCount"></span></summary>
+      <ul id="removed" class="removed"></ul>
+    </details>
     <div class="share">
       <p class="muted">¿Te ha servido? Cuéntaselo a alguien: más de uno manda fotos con la
       ubicación de su casa sin saberlo.</p>
