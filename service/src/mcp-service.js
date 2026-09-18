@@ -18,7 +18,7 @@ import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 
 import { loadConfig } from './config.js';
-import { clean, assess, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
+import { clean, assess, scanText, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
 import { aceptes, buildResourceServer } from './payments.js';
 import { esPrincipal } from './es-main.js';
 import { comprobarRegistro } from './ledger.js';
@@ -36,32 +36,34 @@ const OPCIONES = {
   attachments: z.boolean().optional().describe('Quitar también los adjuntos del PDF'),
 };
 
+/** Herramienta de pago genérica: mismo patrón para las tres, distinto precio y trabajo. */
+async function registrarHerramientaDePago(server, resourceServer, config, {
+  nombre, url, descripcion, precio, esquema, trabajo,
+}) {
+  const accepts = await resourceServer.buildPaymentRequirementsFromOptions(aceptes(config, precio), {});
+  const cobrar = createPaymentWrapper(resourceServer, {
+    accepts,
+    resource: { url, description: descripcion, mimeType: 'application/json', serviceName: config.serviceName },
+  });
+  server.tool(nombre, descripcion, esquema, cobrar(trabajo));
+}
+
 export async function buildServer(config = loadConfig()) {
   const server = new McpServer({ name: 'quitametadatos', version: '1.0.0' });
 
   const resourceServer = await buildResourceServer(config);
   await resourceServer.initialize();
 
-  const accepts = await resourceServer.buildPaymentRequirementsFromOptions(aceptes(config), {});
-
-  const cobrar = createPaymentWrapper(resourceServer, {
-    accepts,
-    resource: {
-      url: 'mcp://tool/limpiar_metadatos',
-      description: 'Quita los metadatos de un documento, PDF o imagen',
-      mimeType: 'application/json',
-      serviceName: config.serviceName,
-    },
-  });
-
-  server.tool(
-    'limpiar_metadatos',
-    `Quita los metadatos (autor, empresa, fechas, GPS, comentarios, macros...) de un PDF, `
-    + `documento de Word/Excel/PowerPoint o imagen JPEG/PNG/WebP. Cuesta ${config.price} por `
-    + `llamada (se puede pagar en ${config.networks.map((n) => n.network).join(' o ')}), `
-    + `pagado con la cartera del agente (x402). `
-    + `Si el archivo no se puede procesar, la llamada falla y no se cobra.`,
-    {
+  await registrarHerramientaDePago(server, resourceServer, config, {
+    nombre: 'limpiar_metadatos',
+    url: 'mcp://tool/limpiar_metadatos',
+    precio: config.price,
+    descripcion: `Quita los metadatos (autor, empresa, fechas, GPS, comentarios, macros...) de un PDF, `
+      + `documento de Word/Excel/PowerPoint o imagen JPEG/PNG/WebP. Cuesta ${config.price} por `
+      + `llamada (se puede pagar en ${config.networks.map((n) => n.network).join(' o ')}), `
+      + `pagado con la cartera del agente (x402). `
+      + `Si el archivo no se puede procesar, la llamada falla y no se cobra.`,
+    esquema: {
       nombre: z.string().describe('Nombre del archivo con su extensión, p.ej. "informe.docx"'),
       bytesBase64: z.string().describe('Contenido del archivo en base64'),
       opciones: z.object(OPCIONES).optional()
@@ -69,7 +71,7 @@ export async function buildServer(config = loadConfig()) {
       guardarEn: z.string().optional()
         .describe('Ruta donde escribir el archivo limpio (opcional)'),
     },
-    cobrar(async ({ nombre, bytesBase64, opciones, guardarEn }) => {
+    trabajo: async ({ nombre, bytesBase64, opciones, guardarEn }) => {
       const bytes = new Uint8Array(Buffer.from(bytesBase64, 'base64'));
       if (bytes.length > config.maxFileBytes) {
         return { isError: true, content: [{ type: 'text', text: `El archivo supera ${config.maxFileBytes} bytes.` }] };
@@ -95,44 +97,58 @@ export async function buildServer(config = loadConfig()) {
           text: `Archivo limpio (base64, ${salida.bytes.length} bytes):\n${limpioBase64}`,
         }],
       };
-    }),
-  );
-
-  const acceptsRiesgo = await resourceServer.buildPaymentRequirementsFromOptions(
-    aceptes(config, config.priceScan), {},
-  );
-  const cobrarRiesgo = createPaymentWrapper(resourceServer, {
-    accepts: acceptsRiesgo,
-    resource: {
-      url: 'mcp://tool/evaluar_riesgo',
-      description: 'Evalúa si es prudente abrir un documento, PDF o imagen',
-      mimeType: 'application/json',
-      serviceName: config.serviceName,
     },
   });
 
-  server.tool(
-    'evaluar_riesgo',
-    `Evalúa si es prudente abrir o procesar un PDF, documento de Office o imagen: busca `
-    + `macros, JavaScript/acciones automáticas en PDF, conexiones a bases de datos, archivos `
-    + `incrustados y enlaces a otros archivos. No modifica nada, solo analiza. Cuesta `
-    + `${config.priceScan} por llamada (se puede pagar en `
-    + `${config.networks.map((n) => n.network).join(' o ')}), pagado con la cartera del `
-    + `agente (x402). No es un antivirus: mira la estructura del archivo, no el contenido `
-    + `del código. Si el archivo no se puede leer, la llamada falla y no se cobra.`,
-    {
+  await registrarHerramientaDePago(server, resourceServer, config, {
+    nombre: 'evaluar_riesgo',
+    url: 'mcp://tool/evaluar_riesgo',
+    precio: config.priceScan,
+    descripcion: `Evalúa si es prudente abrir o procesar un PDF, documento de Office o imagen: busca `
+      + `macros, JavaScript/acciones automáticas en PDF, conexiones a bases de datos, archivos `
+      + `incrustados y enlaces a otros archivos. No modifica nada, solo analiza. Cuesta `
+      + `${config.priceScan} por llamada (se puede pagar en `
+      + `${config.networks.map((n) => n.network).join(' o ')}), pagado con la cartera del `
+      + `agente (x402). No es un antivirus: mira la estructura del archivo, no el contenido `
+      + `del código. Si el archivo no se puede leer, la llamada falla y no se cobra.`,
+    esquema: {
       nombre: z.string().describe('Nombre del archivo con su extensión, p.ej. "informe.xlsx"'),
       bytesBase64: z.string().describe('Contenido del archivo en base64'),
     },
-    cobrarRiesgo(async ({ nombre, bytesBase64 }) => {
+    trabajo: async ({ nombre, bytesBase64 }) => {
       const bytes = new Uint8Array(Buffer.from(bytesBase64, 'base64'));
       if (bytes.length > config.maxFileBytes) {
         return { isError: true, content: [{ type: 'text', text: `El archivo supera ${config.maxFileBytes} bytes.` }] };
       }
       const evaluacion = await assess(sanitizeFilename(nombre), bytes);
       return { content: [{ type: 'text', text: JSON.stringify({ ok: true, ...evaluacion }) }] };
-    }),
-  );
+    },
+  });
+
+  await registrarHerramientaDePago(server, resourceServer, config, {
+    nombre: 'escanear_secretos',
+    url: 'mcp://tool/escanear_secretos',
+    precio: config.priceSecrets,
+    descripcion: `Busca secretos y credenciales expuestas en un texto o fragmento de código antes de `
+      + `compartirlo: claves de AWS/GitHub/Slack/Stripe/OpenAI/Anthropic/Google/SendGrid/npm, claves `
+      + `privadas PEM, cadenas de conexión con contraseña y JWT. No modifica nada, no ejecuta el texto. `
+      + `Cuesta ${config.priceSecrets} por llamada (se puede pagar en `
+      + `${config.networks.map((n) => n.network).join(' o ')}), pagado con la cartera del agente (x402). `
+      + `No es un escáner exhaustivo: cubre los formatos de credencial más comunes. `
+      + `Si el texto no es UTF-8 válido, la llamada falla y no se cobra.`,
+    esquema: {
+      nombre: z.string().describe('Nombre del archivo o fragmento, p.ej. "deploy.env"'),
+      bytesBase64: z.string().describe('Texto o código en base64 (debe ser UTF-8)'),
+    },
+    trabajo: async ({ nombre, bytesBase64 }) => {
+      const bytes = new Uint8Array(Buffer.from(bytesBase64, 'base64'));
+      if (bytes.length > config.maxFileBytes) {
+        return { isError: true, content: [{ type: 'text', text: `El texto supera ${config.maxFileBytes} bytes.` }] };
+      }
+      const evaluacion = scanText(sanitizeFilename(nombre), bytes);
+      return { content: [{ type: 'text', text: JSON.stringify({ ok: true, ...evaluacion }) }] };
+    },
+  });
 
   return server;
 }
@@ -149,7 +165,8 @@ if (esPrincipal(import.meta)) {
   await server.connect(new StdioServerTransport());
   if (config.ledgerFile) console.error(`[mcp-service] ${await comprobarRegistro(config.ledgerFile)}`);
   for (const { network, payTo } of config.networks) {
-    console.error(`[mcp-service] cobra ${config.price} (limpiar) / ${config.priceScan} (evaluar riesgo) por llamada en ${network} a ${payTo}`);
+    console.error(`[mcp-service] cobra ${config.price} (limpiar) / ${config.priceScan} (evaluar riesgo) `
+      + `/ ${config.priceSecrets} (escanear secretos) por llamada en ${network} a ${payTo}`);
   }
   console.error(`[mcp-service] ajustes por defecto: ${JSON.stringify(DEFAULT_OPTIONS)}`);
 }

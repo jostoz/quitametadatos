@@ -20,6 +20,7 @@ export const DEFAULTS = Object.freeze({
   network: 'eip155:84532', // Base Sepolia (pruebas con USDC de faucet)
   price: '$0.02',
   priceScan: '$0.01',
+  priceSecrets: '$0.01',
   facilitatorUrl: 'https://x402.org/facilitator',
   host: '127.0.0.1',
   port: 8402,
@@ -166,6 +167,7 @@ export function loadConfig(env = process.env) {
   };
   const price = precio(env.X402_PRICE || DEFAULTS.price, 'X402_PRICE');
   const priceScan = precio(env.X402_PRICE_SCAN || DEFAULTS.priceScan, 'X402_PRICE_SCAN');
+  const priceSecrets = precio(env.X402_PRICE_SECRETS || DEFAULTS.priceSecrets, 'X402_PRICE_SECRETS');
 
   return {
     networks,
@@ -175,6 +177,7 @@ export function loadConfig(env = process.env) {
     payTo: networks[0].payTo,
     price,
     priceScan,
+    priceSecrets,
     facilitatorUrl: (env.X402_FACILITATOR_URL || DEFAULTS.facilitatorUrl).trim(),
     facilitatorAuthModule: (env.X402_FACILITATOR_AUTH_MODULE || '').trim() || null,
     // Si se define, el reto 402 lleva un blockhash reciente de Solana y el

@@ -13,11 +13,7 @@
 // antivirus: no analiza el código de las macros, no tiene firmas de malware,
 // no sustituye un escáner de verdad. Es un primer filtro barato y explicable.
 
-const PESO = { alto: 40, medio: 15, bajo: 5 };
-
-function hallazgo(nivel, titulo, detalle) {
-  return { nivel, titulo, detalle };
-}
+import { hallazgo, puntuacionYVeredicto } from './veredicto.js';
 
 function assessOffice(report) {
   const { info, findings } = report;
@@ -73,12 +69,6 @@ function assessPdf(report) {
       + 'incluido un ejecutable, y el lector no siempre avisa antes de abrirlos.'));
   }
   return hallazgos;
-}
-
-function puntuacionYVeredicto(hallazgos) {
-  const puntuacion = Math.min(100, hallazgos.reduce((s, h) => s + PESO[h.nivel], 0));
-  const riesgo = puntuacion >= 40 ? 'alto' : puntuacion >= 15 ? 'medio' : 'bajo';
-  return { puntuacion, riesgo };
 }
 
 const RECOMENDACION = {

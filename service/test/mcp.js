@@ -173,6 +173,30 @@ try {
   check('la llamada anterior (limpiar_metadatos) y esta suman dos cobros distintos',
     facilitator.calls.settle.length === antesRiesgo + 1);
 
+  // ------------------------------------------------------------ D
+  console.log('\nD. Herramienta escanear_secretos (mismo servicio, tercer precio)');
+  const herramientasD = await clienteMCP.listTools();
+  check('expone la herramienta escanear_secretos',
+    herramientasD.tools.some((t) => t.name === 'escanear_secretos'),
+    herramientasD.tools.map((t) => t.name).join(', '));
+
+  const textoSucio = 'const AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE";';
+  const argSecretos = { nombre: 'deploy.env', bytesBase64: Buffer.from(textoSucio).toString('base64') };
+
+  const sinPagoSecretos = await clienteMCP.callTool({ name: 'escanear_secretos', arguments: argSecretos });
+  const textoRetoSecretos = sinPagoSecretos.content.map((c) => c.text).join('\n');
+  check('sin pago pide el importe de secrets (10000)',
+    sinPagoSecretos.isError === true && textoRetoSecretos.includes('10000'), textoRetoSecretos.slice(0, 300));
+
+  const antesSecretos = facilitator.calls.settle.length;
+  const pagadoSecretos = await conPago.callTool('escanear_secretos', argSecretos);
+  check('con pago responde sin error', !pagadoSecretos.isError, JSON.stringify(pagadoSecretos.content?.[0]).slice(0, 300));
+  const salidaSecretos = pagadoSecretos.content.map((c) => c.text).join('\n');
+  check('detecta la clave de AWS', /Access key de AWS/.test(salidaSecretos), salidaSecretos.slice(0, 300));
+  check('no expone la credencial completa en la respuesta', !salidaSecretos.includes('AKIAIOSFODNN7EXAMPLE'));
+  check('cobró el importe de secrets, no el de clean/scan', facilitator.calls.settle.at(-1)?.amount === '10000');
+  check('fue un cobro nuevo (tercer precio, tercera venta)', facilitator.calls.settle.length === antesSecretos + 1);
+
   await clienteMCP.close();
 } finally {
   await stop();

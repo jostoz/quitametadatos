@@ -10,6 +10,7 @@ import { sniffPdf, inspectPdf, stripPdf } from '../../web/pdf.js';
 import { sniff, inspectImage, stripImage } from '../../web/images.js';
 import { readZip, inspect, strip } from '../../web/ooxml.js';
 import { assessRisk } from '../../web/risk.js';
+import { scanSecrets } from '../../web/secrets.js';
 import { createHash } from 'node:crypto';
 
 // Mismos valores por defecto que la interfaz web (web/index.html): quitar
@@ -149,6 +150,30 @@ export async function assess(name, input) {
       sha256Input: sha256(bytes),
     },
     ...assessRisk(kind, report),
+  };
+}
+
+/**
+ * Revisa un texto (código, configuración, un .env, un log...) en busca de
+ * secretos y credenciales expuestas, antes de compartirlo. No decodifica
+ * ningún formato de archivo: el texto tiene que venir ya en UTF-8 — si no lo
+ * está, se rechaza (probablemente es binario, no texto/código).
+ * @returns {Promise<object>} archivo + veredicto de scanSecrets()
+ */
+export function scanText(name, input) {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (!bytes.length) throw new BadRequest(`"${name}" está vacío.`);
+
+  let texto;
+  try {
+    texto = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new BadRequest(`"${name}" no es texto UTF-8 válido (¿es un archivo binario?).`);
+  }
+
+  return {
+    file: { name, bytesInput: bytes.length, sha256Input: sha256(bytes) },
+    ...scanSecrets(texto),
   };
 }
 

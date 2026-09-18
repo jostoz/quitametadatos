@@ -26,12 +26,13 @@ También funciona abriendo `web/index.html` directamente. Soporta varios archivo
 
 ### Qué cobra
 
-Precio por **petición** (no por archivo), hasta 10 archivos y 64 MB. Dos productos, dos precios:
+Precio por **petición** (no por archivo), hasta 10 archivos y 64 MB. Tres productos, tres precios:
 
 | Producto | Precio por defecto | Qué hace |
 |---|---|---|
 | `POST /v1/clean` | 0,02 USDC | Limpia los metadatos y devuelve los archivos |
 | `POST /v1/scan` | 0,01 USDC | Evalúa el riesgo de abrir un archivo, sin modificarlo |
+| `POST /v1/secrets` | 0,01 USDC | Busca credenciales expuestas en texto o código, sin modificarlo |
 
 Se puede cobrar en varias redes a la vez: el agente elige con la cartera que tenga.
 
@@ -43,6 +44,7 @@ Se puede cobrar en varias redes a la vez: el agente elige con la cartera que ten
 |---|---|---|---|
 | `POST` | `/v1/clean` | **sí** | ZIP con los archivos limpios + `informe.json` (o JSON en base64 con `Accept: application/json`) |
 | `POST` | `/v1/scan` | **sí** | JSON con un veredicto de riesgo por archivo (nunca ZIP; no modifica nada) |
+| `POST` | `/v1/secrets` | **sí** | JSON con un veredicto de secretos expuestos por archivo (nunca ZIP; no modifica nada) |
 | `GET` | `/` | no | Descripción del servicio, formatos y cómo pagar |
 | `GET` | `/v1/pricing` | no | Precio de cada producto, redes, direcciones de cobro y límites |
 | `GET` | `/healthz` | no | Estado |
@@ -98,6 +100,34 @@ curl -X POST https://tu-servicio/v1/scan \
 **No es un antivirus.** Mira la estructura del archivo (qué elementos trae), no el
 contenido del código: no analiza qué hace una macro, no tiene firmas de malware.
 
+### `/v1/secrets`: ¿hay credenciales expuestas en este texto?
+
+Mismo espíritu que `/v1/scan` pero antes de compartir, no después de recibir: revisa
+texto o código (un `.env`, un diff, un log, un fragmento) en busca de claves y
+credenciales antes de pegarlo en un gist, mandarlo a otra API o hacer push. Reglas
+deterministas (como gitleaks), nada de IA: cubre claves de AWS, GitHub, Slack,
+Stripe, OpenAI, Anthropic, Google, SendGrid y npm, claves privadas PEM, cadenas de
+conexión con contraseña y JWT, más una heurística genérica de menor confianza para
+"algo que suena a secreto".
+
+```bash
+curl -X POST https://tu-servicio/v1/secrets \
+  -d '{"name":"deploy.env","bytesBase64":"..."}'
+```
+
+```json
+{"ok": true, "files": [{
+  "file": {"name": "deploy.env", "bytesInput": 183, "sha256Input": "…"},
+  "riesgo": "alto", "puntuacion": 100,
+  "hallazgos": [{"nivel": "alto", "titulo": "Access key de AWS", "detalle": "1 coincidencia (línea 1). Ejemplo: AKIA************LE"}],
+  "recomendacion": "…"
+}]}
+```
+
+La credencial nunca vuelve completa en la respuesta (se enmascara: `AKIA************LE`).
+**No es un escáner exhaustivo**: cubre los formatos de credencial más comunes, no
+analiza el significado del texto ni verifica si la credencial sigue siendo válida.
+
 ### Herramientas incluidas
 
 ```bash
@@ -106,7 +136,7 @@ npm run pagar -- <url> [archivo]   # paga a un servicio x402 desde una cartera l
 npm run cartera          # genera el par de carteras de prueba (pagadora + cobradora)
 npm run saldo -- 0x...   # saldo de USDC de una dirección, leído de la cadena
 npm run prueba:testnet   # circuito completo contra el facilitador real de testnet (no cuesta dinero)
-npm run mcp:sell         # expone limpiar_metadatos y evaluar_riesgo como herramientas MCP que cobran por llamada
+npm run mcp:sell         # expone limpiar_metadatos, evaluar_riesgo y escanear_secretos como herramientas MCP que cobran por llamada
 npm run mcp              # puente MCP que PAGA (para agentes sin cartera propia)
 ```
 
@@ -137,6 +167,7 @@ Lo único obligatorio es `X402_PAY_TO`: sin dirección de cobro el servicio no a
 | `X402_NETWORKS` | `eip155:84532` | Redes separadas por comas: `eip155:8453` (Base), `solana:5eykt…` |
 | `X402_PRICE` | `0.02` | Precio de `/v1/clean` por petición. **Sin `$`**: el cargador de `.env` de Bun expande `$0` y se pierde |
 | `X402_PRICE_SCAN` | `0.01` | Precio de `/v1/scan` por petición (mismas reglas que `X402_PRICE`) |
+| `X402_PRICE_SECRETS` | `0.01` | Precio de `/v1/secrets` por petición (mismas reglas que `X402_PRICE`) |
 | `X402_FACILITATOR_URL` | `https://x402.org/facilitator` | Quien verifica y liquida. Solo testnet; para mainnet, PayAI o CDP |
 | `X402_ASSET` / `X402_ASSET_MINT` | USDC | Cobrar en otro token. En EVM tiene que soportar EIP-3009 (USDC, PYUSD, USDP, FDUSD, USDT0). **El USDT clásico no lo soporta**; en Solana vale cualquier SPL |
 | `LEDGER_FILE` | vacío | Registro de ventas (una línea JSON por cobro, con tx y pagador). `off` para desactivarlo |
@@ -159,12 +190,13 @@ El `Dockerfile` se construye desde la **raíz** (no desde `service/`) porque el 
 cd service && npm run test:all
 ```
 
-**207 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
+**237 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
 
 | Fichero | Qué cubre |
 |---|---|
 | `test/e2e.js` | Reto 402 en dos redes, cobro, replay, pagos mal dirigidos, nombres peligrosos, registro de ventas, descubrimiento (`/v1/clean`) |
 | `test/e2e-scan.js` | `/v1/scan`: precio independiente, veredicto de riesgo en fixtures reales, sin cobro si el archivo no se puede leer |
+| `test/e2e-secrets.js` | `/v1/secrets`: precio independiente, detección de credenciales reales sin falsos positivos, sin cobro con texto no-UTF8 |
 | `test/e2e-svm.js` | Pago en Solana con el cliente oficial |
 | `test/e2e-asset.js` | Cobrar con otro token (EVM y Solana) |
 | `test/preflight.js` | Los cinco motivos por los que NO debe dejar cobrar |
@@ -179,11 +211,11 @@ Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 
 | | |
 |---|---|
-| Limpieza, escáner de riesgo, paywall, rechazos sin cobro, doble red, MCP (HTTP y las dos herramientas), registro de ventas | **207 comprobaciones** (`npm run test:all`), sin red y sin dinero |
-| `/v1/scan` en testnet real (Base Sepolia, facilitador PayAI) | pago liquidado y confirmado on-chain, precio independiente de `/v1/clean` |
+| Limpieza, escáner de riesgo, escáner de secretos, paywall, rechazos sin cobro, doble red, MCP (HTTP y las tres herramientas), registro de ventas | **237 comprobaciones** (`npm run test:all`), sin red y sin dinero |
+| `/v1/scan` y `/v1/secrets` en testnet real (Base Sepolia, facilitador PayAI) | pago liquidado y confirmado on-chain en cada uno, precio independiente de `/v1/clean` |
 | Liquidación en testnet (Base Sepolia) | transacciones confirmadas y USDC de prueba en la cartera del cobrador |
-| Liquidación en **mainnet** (Base) | `/v1/clean` y `/v1/scan`: cada uno con transacción confirmada, importe correcto, gas pagado por el facilitador |
-| Descubrimiento | `/v1/clean` y `/v1/scan` aparecen los dos en el catálogo del facilitador, cada uno con su precio (`npm run catalogado`) |
+| Liquidación en **mainnet** (Base) | `/v1/clean`, `/v1/scan` y `/v1/secrets`: cada uno con transacción confirmada, importe correcto, gas pagado por el facilitador |
+| Descubrimiento | los tres productos aparecen en el catálogo del facilitador, cada uno con su precio (`npm run catalogado`) |
 
 Nota sobre el catálogo: el buscador del facilitador no filtra por texto (devuelve
 lo mismo para cualquier consulta); aparece en el listado de recursos.
@@ -207,9 +239,11 @@ La forma de seguir probando esa tesis, ahora que `/v1/clean` ya está en producc
 es **más microservicios para agentes** — no más productos para personas. El criterio
 para elegir cuál construir: algo que un agente no puede hacer bien por sí mismo (no
 tiene el parseo, no quiere mantenerlo) o que le sale más barato pagar por llamada que
-montarlo. `/v1/scan` (evaluar el riesgo de abrir un archivo, §"Endpoints") es el
-primero: reutiliza el mismo motor de análisis de `/v1/clean`, así que fue una
-extensión barata y de bajo riesgo, no un proyecto nuevo.
+montarlo. `/v1/scan` (evaluar el riesgo de abrir un archivo) y `/v1/secrets`
+(buscar credenciales antes de compartir texto/código) son los dos primeros: los dos
+reutilizan motor y patrones ya escritos (`/v1/scan` el análisis de `/v1/clean`;
+`/v1/secrets` la misma capa de veredicto de `/v1/scan`), así que fueron extensiones
+baratas y de bajo riesgo, no proyectos nuevos.
 
 **Esto es lo prioritario.** Lo demás queda anotado como posible implementación
 futura, no como el camino que se está siguiendo ahora:
@@ -227,6 +261,8 @@ futura, no como el camino que se está siguiendo ahora:
 ```
 web/                     app del navegador (el motor de limpieza: pdf.js, images.js, ooxml.js, zip.js)
 web/risk.js              evalúa el riesgo a partir del mismo análisis (lo usa /v1/scan)
+web/secrets.js           detecta credenciales expuestas en texto/código (lo usa /v1/secrets)
+web/veredicto.js         puntuación y umbrales compartidos por risk.js y secrets.js
 service/src/core.js      el mismo motor, en el servidor
 service/src/dom.js       shim DOMParser/XMLSerializer para correr OOXML fuera del navegador
 service/src/payments.js  cableado x402: redes, esquemas, descubrimiento

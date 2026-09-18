@@ -26,6 +26,7 @@ async function makeAuthHeaders(modulePath) {
 
 export const CLEAN_PATH = '/v1/clean';
 export const SCAN_PATH = '/v1/scan';
+export const SECRETS_PATH = '/v1/secrets';
 
 /** Opciones de pago: una por red configurada, al precio del producto que se pida. */
 export function aceptes(config, price = config.price) {
@@ -145,6 +146,38 @@ export function descubrimientoRiesgo(config) {
   });
 }
 
+/** Metadatos de descubrimiento (extensión bazaar) de /v1/secrets. */
+export function descubrimientoSecretos(config) {
+  return declareDiscoveryExtension({
+    method: 'POST',
+    bodyType: 'json',
+    input: { name: 'deploy.env', bytesBase64: '<texto o código en base64>' },
+    inputSchema: {
+      properties: {
+        name: { type: 'string', description: 'Nombre del archivo o fragmento de texto' },
+        bytesBase64: { type: 'string', description: 'Contenido en base64 (debe ser texto UTF-8)' },
+      },
+      required: ['name', 'bytesBase64'],
+    },
+    output: {
+      example: {
+        ok: true,
+        files: [{
+          file: { name: 'deploy.env', bytesInput: 812, sha256Input: '…' },
+          riesgo: 'alto',
+          puntuacion: 40,
+          hallazgos: [{
+            nivel: 'alto',
+            titulo: 'Access key de AWS',
+            detalle: '1 coincidencia (línea 3). Ejemplo: AKIA************LE',
+          }],
+          recomendacion: '…',
+        }],
+      },
+    },
+  });
+}
+
 /** Rutas HTTP protegidas: precio, redes y descubrimiento de cada producto. */
 export function buildRoutes(config) {
   const redes = config.networks.map((n) => n.network);
@@ -171,6 +204,18 @@ export function buildRoutes(config) {
         + 'Si algún archivo no se puede leer, la petición falla y NO se cobra.',
       mimeType: 'application/json',
       extensions: descubrimientoRiesgo(config),
+    },
+    [`POST ${SECRETS_PATH}`]: {
+      accepts: aceptes(config, config.priceSecrets),
+      description: `Buscar secretos y credenciales expuestas en hasta ${config.maxFiles} textos o `
+        + 'fragmentos de código, antes de compartirlos: claves de AWS/GitHub/Slack/Stripe/OpenAI/'
+        + 'Anthropic/Google/SendGrid/npm, claves privadas PEM, cadenas de conexión con contraseña y '
+        + 'JWT. No modifica nada, no ejecuta el texto: solo analiza y devuelve un veredicto en JSON. '
+        + 'No es un escáner exhaustivo: cubre los formatos de credencial más comunes. '
+        + `Se puede pagar en ${redes.join(' o ')}. `
+        + 'Si el texto no es UTF-8 válido, la petición falla y NO se cobra.',
+      mimeType: 'application/json',
+      extensions: descubrimientoSecretos(config),
     },
   };
 }
