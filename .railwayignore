@@ -1,0 +1,8 @@
+node_modules
+**/node_modules
+_out
+__pycache__
+.git
+*.tmp.mjs
+service/.env
+service/ventas.jsonl

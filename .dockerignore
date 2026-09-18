@@ -1,0 +1,13 @@
+.git
+node_modules
+**/node_modules
+_out
+*.pdf
+*.docx
+*.xlsx
+*.tiff
+*.tmp.mjs
+service/test
+service/.env
+service/ventas.jsonl
+__pycache__
