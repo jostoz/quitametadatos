@@ -7,14 +7,17 @@
 // Envía el archivo, resuelve el 402 solo (firma EIP-712), y cuenta lo que pasó:
 // la liquidación, el importe y el archivo limpio que devuelve el servicio.
 
-import { readFile, writeFile } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, resolve } from 'node:path';
 
 import { privateKeyToAccount } from 'viem/accounts';
 import { x402Client } from '@x402/core/client';
 import { ExactEvmScheme } from '@x402/evm';
 import { wrapFetchWithPayment } from '@x402/fetch';
 import { decodePaymentRequiredHeader, decodePaymentResponseHeader } from '@x402/core/http';
+
+import { createPublicClient, formatUnits, http, parseAbi } from 'viem';
+import { base, baseSepolia } from 'viem/chains';
 
 import { readZip } from '../../web/zip.js';
 
@@ -29,9 +32,22 @@ if (!process.env.EVM_PRIVATE_KEY) {
 }
 
 const archivo = resolve(process.argv[3] || '_fixture_foto.jpg');
-const pagador = privateKeyToAccount(process.env.EVM_PRIVATE_KEY.startsWith('0x')
-  ? process.env.EVM_PRIVATE_KEY
-  : `0x${process.env.EVM_PRIVATE_KEY}`);
+
+// Validar la clave aquí y no dentro de viem: su error ("expected hex or 32 bytes")
+// no dice qué hacer, y es fácil pegar un texto de ejemplo o un hash.
+const bruta = process.env.EVM_PRIVATE_KEY.trim();
+const clave = bruta.startsWith('0x') ? bruta : `0x${bruta}`;
+if (!/^0x[0-9a-fA-F]{64}$/.test(clave)) {
+  console.error('\nEVM_PRIVATE_KEY no parece una clave privada de una cartera EVM.');
+  console.error(`  Debe ser 0x + 64 dígitos hexadecimales (recibido "${bruta.slice(0, 14)}…", ${bruta.length} caracteres).`);
+  if (/^(0x)?(TU_|your|xxx|abc|123)/i.test(bruta)) {
+    console.error('  Parece un texto de ejemplo: sustitúyelo por la clave real de tu cartera.');
+  }
+  console.error('\n  ¿No quieres usar la clave de tu cartera principal? Genera una desechable:');
+  console.error('     npm run cartera        (te da dirección y clave, y a dónde mandarle USDC)\n');
+  process.exit(1);
+}
+const pagador = privateKeyToAccount(clave);
 console.log(`Pagador: ${pagador.address}\nServicio: ${url}\nArchivo: ${archivo}\n`);
 
 const formulario = () => {
@@ -49,6 +65,31 @@ if (reto.status !== 402) {
   const d = decodePaymentRequiredHeader(reto.headers.get('payment-required'));
   for (const a of d.accepts) {
     console.log(`  pide ${Number(a.amount) / 1e6} USDC en ${a.network} → ${a.payTo}`);
+  }
+}
+
+// 1b) ¿Tiene saldo? Mejor saberlo antes de intentar pagar.
+const RPC = {
+  'eip155:8453': { chain: base, url: process.env.RPC_URL || 'https://mainnet.base.org' },
+  'eip155:84532': { chain: baseSepolia, url: process.env.RPC_URL || 'https://sepolia.base.org' },
+};
+const ERC20 = parseAbi(['function balanceOf(address) view returns (uint256)']);
+for (const a of (reto.status === 402 ? (decodePaymentRequiredHeader(reto.headers.get('payment-required')).accepts || []) : [])) {
+  const red = RPC[a.network];
+  if (!red) continue;
+  try {
+    const cadena = createPublicClient({ chain: red.chain, transport: http(red.url) });
+    const saldo = await cadena.readContract({ address: a.asset, abi: ERC20, functionName: 'balanceOf', args: [pagador.address] });
+    const falta = BigInt(a.amount) - saldo;
+    if (falta > 0n) {
+      console.log(`  saldo del pagador: ${formatUnits(saldo, 6)} USDC — faltan ${formatUnits(falta, 6)} para pagar en ${a.network}`);
+      console.log(`  manda USDC (${a.network === 'eip155:8453' ? 'red Base' : 'Base Sepolia'}) a ${pagador.address} y repite.`);
+      if (a.network === 'eip155:84532') console.log('  en testnet es gratis: https://faucet.circle.com');
+      process.exit(1);
+    }
+    console.log(`  saldo del pagador: ${formatUnits(saldo, 6)} USDC ✓`);
+  } catch (err) {
+    console.log(`  (no pude leer el saldo: ${err.message.slice(0, 60)})`);
   }
 }
 
@@ -93,6 +134,7 @@ if (pagado.headers.get('content-type')?.includes('zip')) {
   const limpio = zip.find((e) => !e.name.endsWith('.json'));
   if (limpio) {
     const destino = resolve(`_out/${basename(limpio.name)}`);
+    await mkdir(dirname(destino), { recursive: true });
     await writeFile(destino, limpio.data);
     console.log(`\nGuardado: ${destino} (original ${foto.length} → ${limpio.data.length} bytes)`);
   }
