@@ -1,0 +1,20 @@
+# Front para personas: la app que limpia en el navegador.
+#
+# Es un sitio estático (HTML + JS + CSS). Aquí NO corre nada del servicio de
+# pago: los archivos del usuario nunca salen de su navegador.
+#
+# Se construye con RAILWAY_DOCKERFILE_PATH=Dockerfile.web (el otro servicio usa
+# el Dockerfile normal, que necesita la raíz entera por el motor compartido).
+#
+# Desplegar:  railway up -s web      (desde la raíz del repo)
+
+FROM nginx:alpine
+
+# Railway inyecta el puerto en $PORT; la plantilla lo usa al arrancar.
+ENV PORT=8080
+
+COPY web /usr/share/nginx/html
+COPY docker/nginx.conf.template /etc/nginx/templates/default.conf.template
+
+# La imagen de nginx sustituye ${PORT} en la plantilla al arrancar.
+EXPOSE 8080
