@@ -182,8 +182,8 @@ Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 | Limpieza, escáner de riesgo, paywall, rechazos sin cobro, doble red, MCP (HTTP y las dos herramientas), registro de ventas | **207 comprobaciones** (`npm run test:all`), sin red y sin dinero |
 | `/v1/scan` en testnet real (Base Sepolia, facilitador PayAI) | pago liquidado y confirmado on-chain, precio independiente de `/v1/clean` |
 | Liquidación en testnet (Base Sepolia) | transacciones confirmadas y USDC de prueba en la cartera del cobrador |
-| Liquidación en **mainnet** (Base) | transacción confirmada, importe correcto, gas pagado por el facilitador |
-| Descubrimiento | `/v1/clean` aparece en el catálogo del facilitador tras su primer cobro mainnet (`npm run catalogado`); `/v1/scan` se catalogará igual en su primera venta mainnet |
+| Liquidación en **mainnet** (Base) | `/v1/clean` y `/v1/scan`: cada uno con transacción confirmada, importe correcto, gas pagado por el facilitador |
+| Descubrimiento | `/v1/clean` y `/v1/scan` aparecen los dos en el catálogo del facilitador, cada uno con su precio (`npm run catalogado`) |
 
 Nota sobre el catálogo: el buscador del facilitador no filtra por texto (devuelve
 lo mismo para cualquier consulta); aparece en el listado de recursos.
