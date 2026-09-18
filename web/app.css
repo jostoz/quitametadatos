@@ -147,3 +147,18 @@ footer { padding: 10px 20px 50px; color: var(--muted); font-size: .85rem; }
 @media (max-width: 620px) {
   .row { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* Invitación a compartir (aparece después de limpiar) */
+.share { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.share .muted { margin: 0 0 12px; }
+.share-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sharelink {
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: .9rem;
+}
+.sharelink:hover { border-color: var(--accent); }
+.indentsmall { margin: 10px 0 0; }

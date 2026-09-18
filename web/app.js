@@ -29,6 +29,41 @@ function kindLabel(item) {
   return item.report.info.formatLabel;
 }
 
+// ---------------------------------------------------------------- compartir
+
+// Invitación a compartir, sin rastreo y sin scripts de terceros: los enlaces solo
+// se abren cuando el usuario hace clic, y el texto lo pone él.
+function setupShare() {
+  const url = location.origin + location.pathname;
+  const texto = 'Quita los metadatos de tus archivos (fotos, Word, PDF) en el navegador, '
+    + 'sin subirlos a ningún sitio:';
+  const t = encodeURIComponent(texto);
+  const u = encodeURIComponent(url);
+
+  $('shareWa').href = `https://wa.me/?text=${t}%20${u}`;
+  $('shareX').href = `https://x.com/intent/post?text=${t}&url=${u}`;
+  $('shareLi').href = `https://www.linkedin.com/sharing/share-offsite/?url=${u}`;
+
+  // En el móvil, el botón nativo del sistema (donde el usuario elige a quién).
+  const nativo = $('shareNative');
+  if (navigator.share) {
+    nativo.hidden = false;
+    for (const id of ['shareWa', 'shareX', 'shareLi']) $(id).hidden = true;
+    nativo.addEventListener('click', () => {
+      navigator.share({ title: document.title, text: texto, url }).catch(() => {});
+    });
+  }
+
+  $('shareCopy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      $('shareCopied').hidden = false;
+    } catch {
+      showError('No se pudo copiar el enlace. Cópialo de la barra del navegador.');
+    }
+  });
+}
+
 // ---------------------------------------------------------------- lectura
 
 async function analyze(file) {
@@ -399,6 +434,7 @@ drop.addEventListener('drop', (e) => {
   if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
 });
 $('clean').addEventListener('click', clean);
+setupShare();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {

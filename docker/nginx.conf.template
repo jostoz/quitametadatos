@@ -23,9 +23,16 @@ server {
         add_header Cache-Control "no-cache";
     }
 
-    # Los recursos con hash o estáticos sí pueden cachearse un rato.
-    location ~* \.(css|js|png|webp|svg|woff2?)$ {
-        add_header Cache-Control "public, max-age=3600";
+    # Los ficheros de la app (html, js, css) NO llevan hash en el nombre: si se
+    # cachean mucho tiempo, un despliegue nuevo llega con el JS viejo. Se
+    # revalidan siempre (nginx responde 304 si no cambiaron, que es barato).
+    location ~* \.(html|js|css|webmanifest|json)$ {
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    # Las imágenes sí pueden cachearse: cambian rara vez.
+    location ~* \.(png|webp|svg|ico|woff2?)$ {
+        add_header Cache-Control "public, max-age=86400";
     }
 
     # Comprime lo que se pueda; la app es texto.

@@ -5,7 +5,7 @@
 // Estrategia: el documento se pide a la red (para recibir mejoras) con la caché
 // como respaldo, y los recursos se sirven de la caché mientras se refrescan en
 // segundo plano.
-const CACHE = 'sin-metadatos-v2';
+const CACHE = 'sin-metadatos-v3';
 const ASSETS = [
   './',
   './index.html',
