@@ -142,6 +142,13 @@ npm run mcp              # puente MCP que PAGA (para agentes sin cartera propia)
 
 Además, si el servicio declara la extensión `bazaar`, los agentes pueden descubrirlo en el catálogo del facilitador (`GET /discovery/resources`). `npm run pagar` avisa cuando el catalogado funciona.
 
+`npm run distribuir` recorre los canales por donde un agente encuentra un servicio
+(catálogo del facilitador, mcp.directory, las listas awesome, Smithery, el registro
+oficial de MCP, la identidad ERC-8004) y dice, en seco y sin enviar nada, cuál está
+publicado, cuál ya depende solo de un mantenedor y cuál falta. `npm run distribuir --
+--servicio <url-pública>` empuja de verdad el catálogo: levanta el servicio en local
+con esa `PUBLIC_URL` y le hace un cobro real, que es lo que lo registra en el bazaar.
+
 ---
 
 ## Ponerlo en marcha
@@ -390,6 +397,7 @@ service/src/server.js    API HTTP
 service/src/ledger.js    registro de ventas
 service/src/wallet.js    cartera del agente (Privy o claves locales, EVM y Solana)
 service/src/preflight.js chequeo previo al primer cobro
+service/src/distribuir.js los canales por donde un agente encuentra el servicio
 service/test/            las pruebas y sus dobles (facilitador, RPC, pagos Solana)
 verify_clean_*.py        verificadores de los archivos limpios
 make_fixture_*.py        generadores de los ficheros de prueba
