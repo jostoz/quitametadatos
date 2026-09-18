@@ -159,7 +159,7 @@ El `Dockerfile` se construye desde la **raíz** (no desde `service/`) porque el 
 cd service && npm run test:all
 ```
 
-**200 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
+**207 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
 
 | Fichero | Qué cubre |
 |---|---|
@@ -179,7 +179,7 @@ Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 
 | | |
 |---|---|
-| Limpieza, escáner de riesgo, paywall, rechazos sin cobro, doble red, MCP, registro de ventas | **200 comprobaciones** (`npm run test:all`), sin red y sin dinero |
+| Limpieza, escáner de riesgo, paywall, rechazos sin cobro, doble red, MCP (HTTP y las dos herramientas), registro de ventas | **207 comprobaciones** (`npm run test:all`), sin red y sin dinero |
 | `/v1/scan` en testnet real (Base Sepolia, facilitador PayAI) | pago liquidado y confirmado on-chain, precio independiente de `/v1/clean` |
 | Liquidación en testnet (Base Sepolia) | transacciones confirmadas y USDC de prueba en la cartera del cobrador |
 | Liquidación en **mainnet** (Base) | transacción confirmada, importe correcto, gas pagado por el facilitador |

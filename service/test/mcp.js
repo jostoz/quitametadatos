@@ -29,6 +29,7 @@ import { startStubFacilitator } from './stub-facilitator.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RAICES = join(HERE, '..', '..');
 const FOTO = join(RAICES, '_fixture_foto.jpg');
+const XLSX_RIESGOSO = join(RAICES, '_fixture_sucio.xlsx');
 
 let ok = 0;
 const fallos = [];
@@ -144,6 +145,33 @@ try {
   });
   check('un archivo ilegible devuelve error', malo.isError === true, JSON.stringify(malo.content).slice(0, 200));
   check('y no se cobra por el intento fallido', facilitator.calls.settle.length === antesCobro + 1);
+
+  // ------------------------------------------------------------ C
+  console.log('\nC. Herramienta evaluar_riesgo (mismo servicio, precio distinto)');
+  const herramientasServicio = await clienteMCP.listTools();
+  check('expone la herramienta evaluar_riesgo',
+    herramientasServicio.tools.some((t) => t.name === 'evaluar_riesgo'),
+    herramientasServicio.tools.map((t) => t.name).join(', '));
+
+  const xlsxBase64 = Buffer.from(new Uint8Array(await readFile(XLSX_RIESGOSO))).toString('base64');
+  const argRiesgo = { nombre: 'cartera.xlsx', bytesBase64: xlsxBase64 };
+
+  const sinPagoRiesgo = await clienteMCP.callTool({ name: 'evaluar_riesgo', arguments: argRiesgo });
+  const textoRetoRiesgo = sinPagoRiesgo.content.map((c) => c.text).join('\n');
+  check('sin pago pide el importe de scan (10000), no el de clean',
+    sinPagoRiesgo.isError === true && textoRetoRiesgo.includes('10000') && !textoRetoRiesgo.includes('20000'),
+    textoRetoRiesgo.slice(0, 300));
+
+  const antesRiesgo = facilitator.calls.settle.length;
+  const pagadoRiesgo = await conPago.callTool('evaluar_riesgo', argRiesgo);
+  check('con pago responde sin error', !pagadoRiesgo.isError, JSON.stringify(pagadoRiesgo.content?.[0]).slice(0, 300));
+  const salidaRiesgo = pagadoRiesgo.content.map((c) => c.text).join('\n');
+  check('detecta riesgo alto en el archivo con conexión a base de datos',
+    /"riesgo":"alto"/.test(salidaRiesgo), salidaRiesgo.slice(0, 300));
+  check('no devuelve el archivo (solo el veredicto)', !/bytesBase64/.test(salidaRiesgo));
+  check('cobró el importe de scan, no el de clean', facilitator.calls.settle.at(-1)?.amount === '10000');
+  check('la llamada anterior (limpiar_metadatos) y esta suman dos cobros distintos',
+    facilitator.calls.settle.length === antesRiesgo + 1);
 
   await clienteMCP.close();
 } finally {
