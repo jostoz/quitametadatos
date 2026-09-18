@@ -17,7 +17,7 @@ import { createPaymentWrapper } from '@x402/mcp';
 import { writeFile } from 'node:fs/promises';
 import { z } from 'zod';
 
-import { loadConfig } from './config.js';
+import { loadConfig, PRODUCTOS } from './config.js';
 import { clean, assess, scanText, DEFAULT_OPTIONS, sanitizeFilename } from './core.js';
 import { aceptes, buildResourceServer } from './payments.js';
 import { esPrincipal } from './es-main.js';
@@ -50,11 +50,14 @@ async function registrarHerramientaDePago(server, resourceServer, config, {
 
 export async function buildServer(config = loadConfig()) {
   const server = new McpServer({ name: 'quitametadatos', version: '1.0.0' });
+  // Herramientas de los productos que sirve ESTE proceso (PRODUCTOS): un
+  // servicio dedicado al escaneo no anuncia `limpiar_metadatos`, ni al revés.
+  const activos = config.productos || PRODUCTOS;
 
   const resourceServer = await buildResourceServer(config);
   await resourceServer.initialize();
 
-  await registrarHerramientaDePago(server, resourceServer, config, {
+  if (activos.includes('clean')) await registrarHerramientaDePago(server, resourceServer, config, {
     nombre: 'limpiar_metadatos',
     url: 'mcp://tool/limpiar_metadatos',
     precio: config.price,
@@ -100,7 +103,7 @@ export async function buildServer(config = loadConfig()) {
     },
   });
 
-  await registrarHerramientaDePago(server, resourceServer, config, {
+  if (activos.includes('scan')) await registrarHerramientaDePago(server, resourceServer, config, {
     nombre: 'evaluar_riesgo',
     url: 'mcp://tool/evaluar_riesgo',
     precio: config.priceScan,
@@ -125,7 +128,7 @@ export async function buildServer(config = loadConfig()) {
     },
   });
 
-  await registrarHerramientaDePago(server, resourceServer, config, {
+  if (activos.includes('secrets')) await registrarHerramientaDePago(server, resourceServer, config, {
     nombre: 'escanear_secretos',
     url: 'mcp://tool/escanear_secretos',
     precio: config.priceSecrets,

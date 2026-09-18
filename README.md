@@ -173,6 +173,7 @@ Lo único obligatorio es `X402_PAY_TO`: sin dirección de cobro el servicio no a
 | `LEDGER_FILE` | vacío | Registro de ventas (una línea JSON por cobro, con tx y pagador). `off` para desactivarlo |
 | `PUBLIC_URL` | vacío | Si estás detrás de un proxy o túnel, para que el reto anuncie la URL pública |
 | `MAX_FILES`, `MAX_FILE_BYTES`, `MAX_REQUEST_BYTES` | 10 / 32 MB / 64 MB | Límites por petición |
+| `PRODUCTOS` | los tres | Qué productos expone **este** proceso (`clean`, `scan`, `secrets`). Sin la variable, los tres en un solo servicio; con `PRODUCTOS=scan`, solo el de escaneo (ver [Despliegue](#despliegue)) |
 
 Todo está comentado en `service/.env.example`.
 
@@ -184,13 +185,42 @@ railway up     # desde la raíz: el Dockerfile se construye aquí a propósito
 
 El `Dockerfile` se construye desde la **raíz** (no desde `service/`) porque el servicio importa `web/*.js`. Escucha en `0.0.0.0` y usa el `$PORT` que le inyecte el host. Si usas `LEDGER_FILE`, monta un volumen (en Railway, `/data`) o el registro se pierde en cada despliegue; el servicio avisa por el log al arrancar si no puede escribir.
 
+### Un servicio o tres, con la misma imagen
+
+El motor es uno solo; qué publica cada proceso lo decide `PRODUCTOS`. Tres
+servicios de un producto cada uno, con la misma imagen y el mismo código:
+
+| Servicio | `PRODUCTOS` | Precio | Cartera |
+|---|---|---|---|
+| `quitametadatos-clean` | `clean` | `X402_PRICE` | `X402_PAY_TO` propia |
+| `quitametadatos-scan` | `scan` | `X402_PRICE_SCAN` | `X402_PAY_TO` propia |
+| `quitametadatos-secrets` | `secrets` | `X402_PRICE_SECRETS` | `X402_PAY_TO` propia |
+
+```bash
+docker build -t quitametadatos .    # una sola imagen para los tres
+
+# cada servicio: su PRODUCTOS, su cartera, su PORT, su PUBLIC_URL
+# y su LEDGER_FILE (con SERVICE_NAME distinto, para contabilidad por producto)
+```
+
+Son tres microservicios de verdad —cada uno con su URL, su escalado, su entrada
+en el catálogo del facilitador y su cartera de cobro— pero **el motor y la
+limpieza siguen siendo los mismos ficheros**: no hay tres implementaciones que
+se puedan desincronizar. Si un proceso no sirve un producto, esa ruta responde
+**404** (no se puede cobrar por lo que no se sirve), su descriptor,
+`/v1/pricing`, `/healthz`, su página y sus herramientas MCP hablan solo de sus
+productos, y un `PRODUCTOS` con un valor desconocido no arranca el servicio.
+
+Sin `PRODUCTOS`, un proceso expone los tres productos: el despliegue que ya
+existe se comporta exactamente igual.
+
 ## Pruebas
 
 ```bash
 cd service && npm run test:all
 ```
 
-**237 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
+**273 comprobaciones** (pasan en Bun y en Node), sin red y sin dinero:
 
 | Fichero | Qué cubre |
 |---|---|
@@ -202,6 +232,7 @@ cd service && npm run test:all
 | `test/preflight.js` | Los cinco motivos por los que NO debe dejar cobrar |
 | `test/mcp.js` | Las dos superficies MCP: la que cobra y la que paga |
 | `test/verify-fixtures.js` | Los archivos limpios, validados con los verificadores Python del proyecto |
+| `test/e2e-productos.js` | La separación en microservicios (`PRODUCTOS`): cada proceso publica lo suyo y lo demás da 404, el descriptor y el MCP se recortan, y sin `PRODUCTOS` siguen los tres |
 
 Los tests usan un **facilitador de pruebas** que verifica de verdad las firmas (EIP-712 en EVM, ed25519 en Solana) pero no mueve dinero, y un RPC de Solana de mentira. Por eso pueden correr sin red.
 
@@ -211,7 +242,7 @@ Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 
 | | |
 |---|---|
-| Limpieza, escáner de riesgo, escáner de secretos, paywall, rechazos sin cobro, doble red, MCP (HTTP y las tres herramientas), registro de ventas | **237 comprobaciones** (`npm run test:all`), sin red y sin dinero |
+| Limpieza, escáner de riesgo, escáner de secretos, paywall, rechazos sin cobro, doble red, MCP (HTTP y las tres herramientas), registro de ventas | **273 comprobaciones** (`npm run test:all`), sin red y sin dinero |
 | `/v1/scan` y `/v1/secrets` en testnet real (Base Sepolia, facilitador PayAI) | pago liquidado y confirmado on-chain en cada uno, precio independiente de `/v1/clean` |
 | Liquidación en testnet (Base Sepolia) | transacciones confirmadas y USDC de prueba en la cartera del cobrador |
 | Liquidación en **mainnet** (Base) | `/v1/clean`, `/v1/scan` y `/v1/secrets`: cada uno con transacción confirmada, importe correcto, gas pagado por el facilitador |

@@ -12,6 +12,7 @@ import { HTTPFacilitatorClient } from '@x402/core/server';
 import { convertToTokenAmount } from '@x402/core/utils';
 import { declareDiscoveryExtension } from '@x402/extensions/bazaar';
 
+import { PRODUCTOS } from './config.js';
 import { registrarVentas } from './ledger.js';
 
 /** Cabeceras de autenticación del facilitador (p.ej. CDP), si se configuran. */
@@ -27,6 +28,13 @@ async function makeAuthHeaders(modulePath) {
 export const CLEAN_PATH = '/v1/clean';
 export const SCAN_PATH = '/v1/scan';
 export const SECRETS_PATH = '/v1/secrets';
+
+/** Ruta de cada producto, para saber cuáles publica este proceso. */
+export const RUTAS = Object.freeze({
+  clean: CLEAN_PATH,
+  scan: SCAN_PATH,
+  secrets: SECRETS_PATH,
+});
 
 /** Opciones de pago: una por red configurada, al precio del producto que se pida. */
 export function aceptes(config, price = config.price) {
@@ -181,7 +189,7 @@ export function descubrimientoSecretos(config) {
 /** Rutas HTTP protegidas: precio, redes y descubrimiento de cada producto. */
 export function buildRoutes(config) {
   const redes = config.networks.map((n) => n.network);
-  return {
+  const catalogo = {
     [`POST ${CLEAN_PATH}`]: {
       accepts: aceptes(config, config.price),
       description: `Quitar los metadatos de hasta ${config.maxFiles} archivos `
@@ -218,4 +226,14 @@ export function buildRoutes(config) {
       extensions: descubrimientoSecretos(config),
     },
   };
+
+  // Este proceso solo anuncia (y por tanto solo cobra) los productos que sirve
+  // de verdad: con PRODUCTOS=scan no se publica /v1/clean. Sin la variable van
+  // los tres y el resultado es exactamente el de siempre.
+  const publicadas = new Set(
+    (config.productos || PRODUCTOS).map((id) => `POST ${RUTAS[id]}`),
+  );
+  return Object.fromEntries(
+    Object.entries(catalogo).filter(([clave]) => publicadas.has(clave)),
+  );
 }

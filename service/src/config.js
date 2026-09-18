@@ -69,6 +69,43 @@ export function familyOf(network) {
 
 const CAMPO_PAGO = { evm: 'X402_PAY_TO', svm: 'X402_PAY_TO_SVM' };
 
+/** Productos que puede exponer el servicio (una ruta de pago cada uno). */
+export const PRODUCTOS = Object.freeze(['clean', 'scan', 'secrets']);
+
+/**
+ * Qué productos expone ESTE proceso (variable PRODUCTOS).
+ *
+ * Sin la variable se exponen los tres, que es como se ha desplegado siempre:
+ * actualizar el código no cambia nada. Con PRODUCTOS=scan el proceso es ese
+ * microservicio y solo ese: publica su ruta, su precio y su descubrimiento, y
+ * no anuncia ni cobra por lo que no sirve. Es lo que permite desplegar cada
+ * producto por separado (un servicio de Railway cada uno) con la MISMA imagen
+ * y el MISMO motor: no se duplica código, solo se reparte el despliegue.
+ *
+ *   PRODUCTOS=clean                 → solo limpieza
+ *   PRODUCTOS=scan,secrets          → escáneres, sin limpieza
+ *   (sin PRODUCTOS)                 → los tres, en un solo servicio
+ */
+function productos(env) {
+  const raw = (env.PRODUCTOS || '').trim();
+  if (!raw) return [...PRODUCTOS];
+
+  const pedidos = raw.split(',').map((p) => p.trim().toLowerCase()).filter(Boolean);
+  if (!pedidos.length) {
+    throw new ConfigError(`PRODUCTOS está vacío: indica al menos uno (${PRODUCTOS.join(', ')}) `
+      + 'o quita la variable para exponerlos todos.');
+  }
+  for (const p of pedidos) {
+    if (!PRODUCTOS.includes(p)) {
+      throw new ConfigError(`Producto no soportado: "${p}". Usa ${PRODUCTOS.join(', ')} `
+        + '(separados por comas).');
+    }
+  }
+  // Orden canónico y sin duplicados: el descriptor y los precios salen siempre
+  // en el mismo orden, aunque escribas PRODUCTOS=secrets,scan.
+  return PRODUCTOS.filter((p) => pedidos.includes(p));
+}
+
 /**
  * Token con el que se cobra en cada familia. Por defecto el USDC de esa red
  * (el que conoce el SDK). Con X402_ASSET / X402_ASSET_MINT se puede cobrar otro:
@@ -178,6 +215,9 @@ export function loadConfig(env = process.env) {
     price,
     priceScan,
     priceSecrets,
+    // Productos que expone este proceso (variable PRODUCTOS); por defecto los
+    // tres, para que un despliegue existente se comporte igual que antes.
+    productos: productos(env),
     facilitatorUrl: (env.X402_FACILITATOR_URL || DEFAULTS.facilitatorUrl).trim(),
     facilitatorAuthModule: (env.X402_FACILITATOR_AUTH_MODULE || '').trim() || null,
     // Si se define, el reto 402 lleva un blockhash reciente de Solana y el

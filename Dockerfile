@@ -27,6 +27,9 @@ RUN printf '{"type":"module"}' > /app/package.json
 # Railway no llega al proceso. El puerto lo inyecta Railway en $PORT.
 ENV HOST=0.0.0.0
 ENV PORT=8402
+# Qué productos sirve este contenedor (ver README): con PRODUCTOS=scan la MISMA
+# imagen es el microservicio de escaneo y solo ese. Sin la variable, los tres.
+# ENV PRODUCTOS=scan
 # El disco del contenedor es efímero: el registro de ventas va a un volumen
 # montado en /data (sin volumen, se pierde en cada despliegue).
 ENV LEDGER_FILE=/data/ventas.jsonl

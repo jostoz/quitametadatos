@@ -4,6 +4,13 @@
 // GET  /v1/pricing       → precio, red, dirección de cobro y límites (gratis)
 // GET  /healthz          → estado (gratis)
 // POST /v1/clean         → limpia los archivos; exige pago x402
+// POST /v1/scan          → evalúa el riesgo de abrir el archivo; exige pago x402
+// POST /v1/secrets       → busca credenciales expuestas en texto; exige pago x402
+//
+// Qué productos sirve este proceso lo decide la variable PRODUCTOS (ver
+// src/config.js): con PRODUCTOS=scan este servidor es el microservicio de
+// escaneo y solo publica /v1/scan. Sin la variable expone los tres, como
+// siempre. El motor y los manejadores son los mismos en cualquier caso.
 //
 // El cobro lo aplica el middleware de @x402/hono: sin cabecera de pago la
 // petición recibe 402 con los requisitos; con un pago válido se ejecuta el
@@ -211,6 +218,69 @@ async function handleSecrets(c, config) {
 }
 
 
+// ---------------------------------------------------------------- catálogo
+
+/**
+ * Ficha de cada producto: su ruta, su precio y su trabajo.
+ *
+ * El proceso expone solo los que diga config.productos (variable PRODUCTOS),
+ * de modo que la MISMA imagen sirve para un servicio con los tres productos o
+ * para tres servicios de uno solo. No se duplica nada: el motor (core.js), el
+ * catálogo y los manejadores son los mismos; lo que cambia es qué se publica.
+ */
+const CATALOGO = {
+  clean: {
+    ruta: CLEAN_PATH,
+    campoPrecio: 'precio',
+    precio: (config) => config.price,
+    manejar: handleClean,
+    titulo: 'Limpiar metadatos',
+    descripcion: 'multipart/form-data, campo "file" (repetible) y "options" (JSON opcional). '
+      + 'Devuelve un ZIP con los archivos limpios y informe.json. '
+      + 'Con "Accept: application/json" devuelve los archivos en base64 '
+      + '(necesario si no puedes leer binario).',
+    ejemplo: '{"name":"foto.jpg","bytesBase64":"..."}',
+  },
+  scan: {
+    ruta: SCAN_PATH,
+    campoPrecio: 'precioScan',
+    precio: (config) => config.priceScan,
+    manejar: handleScan,
+    titulo: 'Evaluar el riesgo',
+    descripcion: 'igual que /v1/clean pero sin "options"; no limpia nada, solo '
+      + 'evalúa el riesgo (macros, JavaScript, conexiones externas...) y devuelve JSON siempre, sin ZIP.',
+    ejemplo: '{"name":"informe.xlsx","bytesBase64":"..."}',
+  },
+  secrets: {
+    ruta: SECRETS_PATH,
+    campoPrecio: 'precioSecrets',
+    precio: (config) => config.priceSecrets,
+    manejar: handleSecrets,
+    titulo: 'Buscar credenciales expuestas',
+    descripcion: 'busca secretos y credenciales expuestas en texto o código (claves de '
+      + 'AWS/GitHub/Slack/Stripe/OpenAI/Anthropic/Google/SendGrid/npm, PEM, cadenas de conexión, JWT). '
+      + 'No modifica nada; devuelve JSON siempre, sin ZIP.',
+    ejemplo: '{"name":"deploy.env","bytesBase64":"..."}',
+  },
+};
+
+/** Productos de este proceso, en orden canónico: lista de [id, ficha]. */
+const activos = (config) => (config.productos || Object.keys(CATALOGO))
+  .map((id) => [id, CATALOGO[id]]);
+
+/**
+ * Precios de los productos activos, con los nombres de siempre (precio,
+ * precioScan, precioSecrets). Un servicio de un solo producto anuncia solo el
+ * suyo: no publica el precio de lo que no sirve.
+ */
+const preciosDe = (config) => Object.fromEntries(
+  activos(config).map(([, p]) => [p.campoPrecio, p.precio(config)]),
+);
+
+/** ¿Este proceso sirve el producto indicado? (p.ej. las "options" son de clean) */
+const sirve = (config, id) => (config.productos || Object.keys(CATALOGO)).includes(id);
+
+
 /** Escapa texto que va a HTML (los valores vienen de la configuración). */
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -221,10 +291,20 @@ const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
  */
 function paginaHumana(config) {
   const app = config.publicAppUrl;
-  const ejemplo = `${config.publicUrl || 'http://' + config.host + ':' + config.port}/v1/clean`;
-  const ejemploScan = `${config.publicUrl || 'http://' + config.host + ':' + config.port}/v1/scan`;
-  const ejemploSecretos = `${config.publicUrl || 'http://' + config.host + ':' + config.port}/v1/secrets`;
+  const base = config.publicUrl || `http://${config.host}:${config.port}`;
+  const productos = activos(config).map(([, p]) => p);
   const redes = config.networks.map((n) => `${n.network} (${n.payTo})`).join('<br>');
+  // "Precio: <b>$0.02</b> por limpiar metadatos (/v1/clean), ..." con los
+  // productos que sirve ESTE proceso: un servicio de solo /v1/scan no presume
+  // de precios ni de rutas que no existen.
+  const precioTexto = productos
+    .map((p) => `<b>${esc(p.precio(config))}</b> por ${esc(p.titulo.toLowerCase())} `
+      + `(<code>${esc(p.ruta)}</code>)`)
+    .join(', ');
+  const ejemplos = productos
+    .map((p) => `<p class="muted">${esc(p.titulo)} — <code>${esc(p.ruta)}</code>:</p>
+  <pre>curl -X POST ${esc(base + p.ruta)} -d '${p.ejemplo}'</pre>`)
+    .join('\n  ');
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -250,10 +330,7 @@ function paginaHumana(config) {
   de documentos de Office, PDF e imágenes, para programas y agentes. Sin cuenta y sin
   clave de API: se paga por petición.</p>
 
-  <p class="destacado">Precio: <b>${esc(config.price)}</b> por limpiar metadatos
-  (<code>/v1/clean</code>), <b>${esc(config.priceScan)}</b> por evaluar el riesgo de un
-  archivo sin limpiarlo (<code>/v1/scan</code>) y <b>${esc(config.priceSecrets)}</b> por
-  buscar secretos en texto o código (<code>/v1/secrets</code>) — por petición, hasta
+  <p class="destacado">Precio: ${precioTexto} — por petición, hasta
   ${config.maxFiles} archivos y ${Math.round(config.maxRequestBytes / (1024 * 1024))} MB, no por
   archivo. Si algún archivo no se puede procesar, la petición falla y <b>no se cobra</b>.</p>
 
@@ -262,16 +339,7 @@ function paginaHumana(config) {
   <code>402</code> con los requisitos. Firmas con la cartera de tu agente y repites la
   petición; el gas lo paga el facilitador, así que solo necesitas USDC.</p>
   <p class="muted">Cobramos en:<br>${redes}</p>
-  <pre>curl -X POST ${esc(ejemplo)} \
-  -H 'Accept: application/json' \
-  -d '{"name":"foto.jpg","bytesBase64":"..."}'</pre>
-  <p class="muted">Para solo evaluar el riesgo sin limpiar nada (devuelve JSON siempre,
-  sin ZIP):</p>
-  <pre>curl -X POST ${esc(ejemploScan)} \
-  -d '{"name":"informe.xlsx","bytesBase64":"..."}'</pre>
-  <p class="muted">O buscar credenciales expuestas en texto/código antes de compartirlo:</p>
-  <pre>curl -X POST ${esc(ejemploSecretos)} \
-  -d '{"name":"deploy.env","bytesBase64":"..."}'</pre>
+  ${ejemplos}
   <p class="muted">Con <code>Accept: application/json</code> devuelve los archivos en base64;
   sin esa cabecera devuelve un ZIP con los archivos limpios y un <code>informe.json</code>
   (tamaños, hashes y qué se quitó). También acepta <code>multipart/form-data</code>.</p>
@@ -301,10 +369,12 @@ export async function createApp(config, { resourceServer } = {}) {
   const server = resourceServer || await buildResourceServer(config);
   const routes = buildRoutes(config);
 
+  const productos = activos(config);
+  const rutasDePago = new Set(productos.map(([, p]) => p.ruta));
+
   // Rechazo temprano de cuerpos enormes: nunca se cobra por esto.
   app.use('*', async (c, next) => {
-    if (c.req.method === 'POST'
-      && (c.req.path === CLEAN_PATH || c.req.path === SCAN_PATH || c.req.path === SECRETS_PATH)) {
+    if (c.req.method === 'POST' && rutasDePago.has(c.req.path)) {
       const len = Number(c.req.header('content-length') || 0);
       if (len > config.maxRequestBytes) {
         return json({
@@ -326,12 +396,12 @@ export async function createApp(config, { resourceServer } = {}) {
     return json({
     servicio: config.serviceName,
     version: SERVICE_VERSION,
+    // Qué productos sirve este proceso: un microservicio puede servir uno solo.
+    productos: config.productos,
     descripcion: 'Quita los metadatos de documentos, PDF e imágenes. Cobra por petición '
       + 'con x402: el agente paga desde su propia cartera, sin cuentas ni claves de API.',
     protocolo: { nombre: 'x402', version: 2, cabeceraPago: 'PAYMENT-SIGNATURE', reto: 402 },
-    precio: config.price,
-    precioScan: config.priceScan,
-    precioSecrets: config.priceSecrets,
+    ...preciosDe(config),
     redes: config.networks.map(({ network, family, payTo }) => ({ red: network, familia: family, cobrarA: payTo })),
     limites: {
       archivosPorPeticion: config.maxFiles,
@@ -339,48 +409,46 @@ export async function createApp(config, { resourceServer } = {}) {
       bytesPorPeticion: config.maxRequestBytes,
     },
     endpoints: {
-      [`POST ${CLEAN_PATH}`]: 'multipart/form-data, campo "file" (repetible) y "options" (JSON opcional). '
-        + 'Devuelve un ZIP con los archivos limpios y informe.json. '
-        + 'Con "Accept: application/json" devuelve los archivos en base64 (necesario si no puedes leer binario).',
-      [`POST ${SCAN_PATH}`]: 'igual que /v1/clean pero sin "options"; no limpia nada, solo '
-        + 'evalúa el riesgo (macros, JavaScript, conexiones externas...) y devuelve JSON siempre, sin ZIP.',
-      [`POST ${SECRETS_PATH}`]: 'busca secretos y credenciales expuestas en texto o código (claves de '
-        + 'AWS/GitHub/Slack/Stripe/OpenAI/Anthropic/Google/SendGrid/npm, PEM, cadenas de conexión, JWT). '
-        + 'No modifica nada; devuelve JSON siempre, sin ZIP.',
+      ...Object.fromEntries(productos.map(([, p]) => [`POST ${p.ruta}`, p.descripcion])),
       'GET /v1/pricing': 'precio, red y límites (gratis)',
       'GET /healthz': 'estado del servicio (gratis)',
     },
     comoPagar: {
       'cualquier agente x402': 'Pide POST '
-        + `${CLEAN_PATH} sin pagar y recibirás un 402 con la cabecera PAYMENT-REQUIRED `
+        + `${productos[0][1].ruta} sin pagar y recibirás un 402 con la cabecera PAYMENT-REQUIRED `
         + '(requisitos: esquema "exact", USDC en la red indicada, importe y dirección). '
         + 'Firma con la cartera del agente y repite la petición con la cabecera PAYMENT-SIGNATURE. '
         + 'Si el trabajo falla, la petición responde 4xx y no se liquida el pago.',
       'CLI de Privy Agent Wallets':
-        'privy-agent-wallet fetch-x402 "<url>/v1/clean" --method POST '
+        `privy-agent-wallet fetch-x402 "<url>${productos[0][1].ruta}" --method POST `
         + '--header "Accept: application/json" --body \'{"name":"foto.jpg","bytesBase64":"..."}\' '
         + '--max-value 20000 (--max-value va en unidades base de USDC: 20000 = 0,02 USDC; '
         + 'mira el importe exacto del reto 402 antes de fijarlo)',
     },
-    formatos: FORMATOS,
-    opciones: {
-      changes: ['keep', 'accept', 'reject'],
-      comments: ['anonymize', 'delete'],
-      icc: ['keep', 'remove'],
-      orientation: ['keep', 'remove'],
-      customProps: 'booleano',
-      macros: 'booleano',
-      connections: 'booleano',
-      attachments: 'booleano',
-      porDefecto: DEFAULT_OPTIONS,
-    },
+    // Los formatos son los que lee el motor de documentos: un servicio que solo
+    // busca credenciales en texto no tiene nada que decir de TIFF o HEIC.
+    ...((sirve(config, 'clean') || sirve(config, 'scan')) && { formatos: FORMATOS }),
+    // Las "options" son de la limpieza: sin /v1/clean no se anuncian.
+    ...(sirve(config, 'clean') && {
+      opciones: {
+        changes: ['keep', 'accept', 'reject'],
+        comments: ['anonymize', 'delete'],
+        icc: ['keep', 'remove'],
+        orientation: ['keep', 'remove'],
+        customProps: 'booleano',
+        macros: 'booleano',
+        connections: 'booleano',
+        attachments: 'booleano',
+        porDefecto: DEFAULT_OPTIONS,
+      },
+    }),
   });
 });
 
   app.get('/v1/pricing', (c) => json({
-    precio: config.price,
-    precioScan: config.priceScan,
-    precioSecrets: config.priceSecrets,
+    // Solo los productos de este proceso.
+    productos: config.productos,
+    ...preciosDe(config),
     por: 'petición (hasta '
       + `${config.maxFiles} archivos, ${Math.round(config.maxRequestBytes / (1024 * 1024))} MB)`,
     protocolo: 'x402',
@@ -401,33 +469,23 @@ export async function createApp(config, { resourceServer } = {}) {
     ok: true,
     servicio: config.serviceName,
     version: SERVICE_VERSION,
+    productos: config.productos,
     redes: config.networks.map((n) => n.network),
     uptimeSegundos: Math.round(process.uptime()),
   }));
 
-  app.post(CLEAN_PATH, async (c) => {
-    try {
-      return await handleClean(c, config);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  });
-
-  app.post(SCAN_PATH, async (c) => {
-    try {
-      return await handleScan(c, config);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  });
-
-  app.post(SECRETS_PATH, async (c) => {
-    try {
-      return await handleSecrets(c, config);
-    } catch (err) {
-      return errorResponse(err);
-    }
-  });
+  // Una ruta por producto activo: los manejadores son los mismos de siempre,
+  // pero cada proceso publica solo los suyos. Lo que no se publica no existe
+  // para el agente (404) y, sobre todo, no se puede cobrar por ello.
+  for (const [, producto] of productos) {
+    app.post(producto.ruta, async (c) => {
+      try {
+        return await producto.manejar(c, config);
+      } catch (err) {
+        return errorResponse(err);
+      }
+    });
+  }
 
   return app;
 }
@@ -490,7 +548,10 @@ if (esPrincipal(import.meta)) {
   }
   const { url } = await startServer(config);
   console.log(`[quitametadatos] escuchando en ${url}`);
-  console.log(`[quitametadatos] precio ${config.price} por petición`);
+  console.log(`[quitametadatos] productos: ${config.productos.join(', ')}`);
+  for (const [, producto] of activos(config)) {
+    console.log(`[quitametadatos] ${producto.ruta} cuesta ${producto.precio(config)} por petición`);
+  }
   for (const { network, payTo } of config.networks) {
     console.log(`[quitametadatos] cobra en ${network} a ${payTo}`);
   }
