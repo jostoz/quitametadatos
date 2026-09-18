@@ -245,6 +245,37 @@ reutilizan motor y patrones ya escritos (`/v1/scan` el análisis de `/v1/clean`;
 `/v1/secrets` la misma capa de veredicto de `/v1/scan`), así que fueron extensiones
 baratas y de bajo riesgo, no proyectos nuevos.
 
+### Descubrimiento
+
+Construir los tres productos no sirve de nada si ningún agente de un tercero los
+encuentra sin que nosotros movamos el dinero (todas las ventas reales hasta ahora
+son autopago, para probar el cobro — no tráfico orgánico). Hecho hasta ahora:
+
+- Repo hecho público otra vez (se privatizó una vez por precaución tras una
+  exposición accidental; se auditó **todo el historial de git**, no solo el
+  árbol actual, con nuestro propio `scanSecrets()` antes de republicarlo — cero
+  secretos reales, solo fixtures de prueba y el email del autor de los commits).
+- Enviado a [mcp.directory](https://mcp.directory) (auto-lee metadatos de GitHub,
+  publica en 24h).
+- PR abierto en [cyberwareX/awesome-x402-mcp-services](https://github.com/cyberwareX/awesome-x402-mcp-services/pull/1)
+  (lista nicho: solo servicios MCP que cobran con x402).
+- PR abierto en [xpaysh/awesome-x402](https://github.com/xpaysh/awesome-x402/pull/1562)
+  (la lista grande del ecosistema, 280+ estrellas — reveló que ya hay cientos de
+  microservicios x402 activos, varios en el mismo espacio de seguridad de
+  documentos: la competencia por atención es real, no solo el pago).
+
+Pendiente, requiere más que un formulario:
+
+- **Smithery** (más tráfico real de agentes vía su gateway) exige transporte
+  **Streamable HTTP** en el MCP, no stdio como tenemos hoy. Es código nuevo
+  (`StreamableHTTPServerTransport` del mismo SDK, expuesto como ruta en
+  Railway) — tamaño parecido a añadir una cuarta ruta, no solo un listado.
+- **Registro oficial de MCP** (`registry.modelcontextprotocol.io`) exige (a)
+  login de GitHub por *device flow* — lo tiene que aprobar una persona con su
+  navegador, no un agente — y (b) publicar el servidor como paquete de npm
+  bajo una cuenta real. Ninguno de los dos es código: son decisiones/acciones
+  que le tocan al mantenedor, no al agente.
+
 **Esto es lo prioritario.** Lo demás queda anotado como posible implementación
 futura, no como el camino que se está siguiendo ahora:
 
