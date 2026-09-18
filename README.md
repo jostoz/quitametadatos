@@ -135,9 +135,20 @@ Los tests usan un **facilitador de pruebas** que verifica de verdad las firmas (
 
 ## Estado
 
-Verificado de punta a punta: limpieza, paywall, rechazos sin cobro, doble red, MCP y **liquidación real en testnet** (transacciones confirmadas en Base Sepolia, con el USDC de prueba llegando a la cartera del cobrador).
+Verificado de punta a punta, con **cobros reales** en testnet y en mainnet:
 
-Lo que **no** está probado todavía: una venta real en mainnet. La primera es la que valida ese último tramo.
+| | |
+|---|---|
+| Limpieza, paywall, rechazos sin cobro, doble red, MCP, registro de ventas | **177 comprobaciones** (`npm run test:all`), sin red y sin dinero |
+| Liquidación en testnet (Base Sepolia) | transacciones confirmadas y USDC de prueba en la cartera del cobrador |
+| Liquidación en **mainnet** (Base) | transacción confirmada, importe correcto, gas pagado por el facilitador |
+| Descubrimiento | el servicio aparece en el catálogo del facilitador tras el primer cobro (`npm run catalogado`) |
+
+Nota sobre el catálogo: el buscador del facilitador no filtra por texto (devuelve
+lo mismo para cualquier consulta); aparece en el listado de recursos.
+
+Lo que queda es de negocio, no de código: precio, promoción y, para empresas, cobro
+con tarjeta y factura (Stripe + CFDI).
 
 ## Estructura
 
