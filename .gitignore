@@ -1,0 +1,4 @@
+# Artefactos de verificación (fixtures regenerables y salidas de prueba)
+_out/
+__pycache__/
+*.pyc

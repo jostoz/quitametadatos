@@ -1,0 +1,149 @@
+:root {
+  --bg: #0f1115;
+  --card: #171a21;
+  --line: #262b35;
+  --text: #e7eaf0;
+  --muted: #98a2b3;
+  --accent: #3d84f7;
+  --personal: #ef5350;
+  --media: #f0a33c;
+  --baja: #6b7280;
+  --edicion: #a78bfa;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+header, main, footer {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+header { padding-top: 44px; }
+
+h1 { font-size: 1.7rem; margin: 0 0 8px; }
+h2 { font-size: 1.05rem; margin: 0 0 14px; letter-spacing: .01em; }
+.lead { color: var(--muted); margin: 0 0 26px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 18px;
+}
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding: 38px 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+}
+.drop.over { border-color: var(--accent); background: #1b2130; }
+.drop span { color: var(--muted); font-size: .9rem; }
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: #232833;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 22px;
+  margin-top: 6px;
+}
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+.hint, .muted { color: var(--muted); font-size: .88rem; }
+.fileline { margin: 0; font-weight: 600; }
+.error { color: var(--personal); font-weight: 600; margin-bottom: 0; }
+code { background: #232833; padding: 1px 5px; border-radius: 4px; font-size: .85em; }
+
+.report { display: flex; flex-direction: column; gap: 18px; }
+.group h3 {
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.row {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #1e222b;
+}
+.row:last-child { border-bottom: 0; }
+.row .label { color: var(--muted); }
+.row .value { word-break: break-word; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
+.sev-personal .dot { background: var(--personal); }
+.sev-media .dot { background: var(--media); }
+.sev-edicion .dot { background: var(--edicion); }
+.sev-baja .dot { background: var(--baja); }
+.sev-personal .label { color: var(--text); }
+
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  margin: 0 0 16px;
+}
+legend { padding: 0 8px; color: var(--muted); font-size: .85rem; }
+.check { display: block; margin: 6px 0; }
+.radios { display: flex; flex-direction: column; gap: 8px; }
+.radios label { display: flex; gap: 10px; align-items: flex-start; }
+.radios span { color: var(--muted); }
+.radios b { color: var(--text); }
+
+.removed { margin: 0; padding-left: 20px; }
+.removed li { margin: 4px 0; }
+.card.warn { border-color: #4a3b1c; background: #1c1a13; }
+.card.warn h2 { color: #f0a33c; }
+
+.trust { list-style: none; padding: 0; margin: 0 0 26px; color: var(--muted); font-size: .9rem; }
+.trust li { padding-left: 18px; position: relative; margin: 4px 0; }
+.trust li::before { content: "—"; position: absolute; left: 0; color: var(--accent); }
+
+.items { list-style: none; margin: 0; padding: 0; }
+.items .item { padding: 10px 0; border-bottom: 1px solid #1e222b; }
+.items .item:last-child { border-bottom: 0; }
+.item-name { font-weight: 600; word-break: break-all; }
+.indent { margin-left: 0; padding-left: 12px; }
+.removed li.fail { color: #f0a33c; }
+
+.steps { color: var(--muted); padding-left: 22px; }
+.steps li { margin: 6px 0; }
+.steps b, .faq dt { color: var(--text); }
+
+.faq { margin: 0; }
+.faq dt { font-weight: 600; margin-top: 14px; }
+.faq dd { margin: 4px 0 0 0; color: var(--muted); }
+
+.prose p { color: var(--muted); }
+footer { padding: 10px 20px 50px; color: var(--muted); font-size: .85rem; }
+
+@media (max-width: 620px) {
+  .row { grid-template-columns: 1fr; gap: 2px; }
+}

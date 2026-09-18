@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quitar metadatos de documentos, PDF e imágenes</title>
+<meta name="description" content="Limpia metadatos de Word, Excel, PowerPoint, PDF y fotos sin subir nada a internet: el archivo se procesa en tu navegador.">
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header>
+  <h1>Quita los metadatos antes de enviar el archivo</h1>
+  <p class="lead">Word, Excel, PowerPoint, PDF y fotos. Tu archivo <b>no se sube a ningún
+  servidor</b>: se procesa dentro de este navegador. Puedes desconectar el internet y
+  seguirá funcionando.</p>
+  <ul class="trust">
+    <li>Sin servidores ni cuentas: el archivo nunca sale de tu equipo</li>
+    <li>Sin recodificar: la imagen y el contenido quedan idénticos</li>
+    <li>Sin registros ni analítica: no hay nada que filtrar</li>
+  </ul>
+</header>
+
+<main>
+  <section class="card" id="load">
+    <div class="drop" id="drop" tabindex="0" role="button"
+         aria-label="Elegir archivos">
+      <strong>Arrastra aquí tus archivos</strong>
+      <span>o</span>
+      <button type="button" id="pick">Elegir archivos</button>
+      <input type="file" id="file" multiple
+             accept=".docx,.docm,.dotx,.dotm,.xlsx,.xlsm,.xltx,.xltm,.pptx,.pptm,.potx,.potm,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.avif"
+             hidden>
+    </div>
+    <p class="hint">Documentos: <code>.docx</code>, <code>.xlsx</code>, <code>.pptx</code>
+    (y variantes con macros). PDF. Imágenes: <code>.jpg</code>, <code>.png</code>,
+    <code>.webp</code>. Hasta 50 archivos por lote. Los formatos antiguos
+    <code>.doc</code>, <code>.xls</code> y <code>.tiff</code> hay que convertirlos antes;
+    de <code>.heic</code> (iPhone) solo mostramos el informe.</p>
+    <p class="error" id="error" hidden></p>
+  </section>
+
+  <section class="card" id="fileCard" hidden>
+    <h2>Archivos cargados <span class="muted" id="fileCount"></span></h2>
+    <ul id="fileList" class="items"></ul>
+  </section>
+
+  <section class="card" id="reportCard" hidden>
+    <h2 id="reportTitle">Qué información personal encontramos</h2>
+    <p class="muted" id="reportSummary"></p>
+    <div id="report" class="report"></div>
+  </section>
+
+  <section class="card" id="optionsCard" hidden>
+    <h2>Qué hacemos con los archivos</h2>
+
+    <fieldset id="officeProps">
+      <legend>Propiedades del documento</legend>
+      <p class="muted">Siempre se eliminan: título, autor, última persona que guardó, asunto,
+      palabras clave, comentarios, número de revisión, empresa, plantilla, tiempos y fechas.</p>
+      <label class="check"><input type="checkbox" id="optCustom" checked>
+        Quitar propiedades personalizadas</label>
+      <label class="check"><input type="checkbox" id="optMacros" checked>
+        Quitar macros incrustadas</label>
+      <label class="check" id="connectionsLabel" hidden>
+        <input type="checkbox" id="optConnections" checked>
+        Quitar las conexiones a bases de datos (pueden llevar usuario y contraseña)</label>
+    </fieldset>
+
+    <fieldset id="pdfField" hidden>
+      <legend>Metadatos del PDF</legend>
+      <p class="muted">Siempre se eliminan: el diccionario <code>/Info</code> (autor, título,
+      asunto, palabras clave, programas y fechas), el paquete XMP, el identificador del
+      archivo y las acciones automáticas (<code>/OpenAction</code>, <code>/AA</code>,
+      JavaScript). Y sobre todo: se reescribe el documento, así que
+      <b>las versiones anteriores dejan de estar dentro del archivo</b> — el texto que se
+      "borró" en una redacción ya no se puede recuperar. Los flujos de contenido se copian
+      sin recomprimir: la imagen no cambia.</p>
+      <label class="check"><input type="checkbox" id="optAttachments">
+        Quitar también los archivos adjuntos incrustados</label>
+      <p class="muted indent">Un PDF puede llevar documentos dentro (el .docx original, un
+      borrador interno). Quitarlos rompe esa parte del documento, por eso no lo hacemos por
+      defecto: si el PDF <b>es</b> ese contenedor, perderías contenido.</p>
+    </fieldset>
+
+    <fieldset id="imageField" hidden>
+      <legend>Metadatos de la imagen</legend>
+      <p class="muted">Siempre se eliminan: coordenadas GPS, cámara y números de serie,
+      objetivos, software, fechas, autor, copyright, XMP, IPTC, comentarios y miniaturas.
+      La imagen <b>no se recodifica</b>: los píxeles quedan idénticos.</p>
+      <label class="check"><input type="checkbox" id="optIcc">
+        Quitar también el perfil de color (ICC)</label>
+      <p class="muted indent">El perfil ICC no identifica a nadie, pero define cómo se ven
+      los colores. Si lo quitas, algunos programas mostrarán tonos distintos.</p>
+      <label class="check"><input type="checkbox" id="optOrientation">
+        Quitar también la orientación</label>
+      <p class="muted indent">Es lo que le dice al visor que gire la foto. Si la quitas,
+      las fotos hechas en vertical pueden aparecer acostadas.</p>
+      <p class="muted">Los formatos <code>.tiff</code>, <code>.heic</code> y
+      <code>.avif</code> todavía no se pueden reescribir sin recodificar: de esos solo
+      mostramos el informe.</p>
+    </fieldset>
+
+    <fieldset id="changesField">
+      <legend>Control de cambios</legend>
+      <div class="radios">
+        <label><input type="radio" name="changes" value="keep" checked>
+          <span><b>Conservar</b> las marcas, sin autor ni fecha</span></label>
+        <label><input type="radio" name="changes" value="accept">
+          <span><b>Aceptar</b> todos los cambios (documento final)</span></label>
+        <label><input type="radio" name="changes" value="reject">
+          <span><b>Rechazar</b> todos los cambios (vuelve al texto anterior)</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset id="commentsField">
+      <legend>Comentarios</legend>
+      <div class="radios">
+        <label><input type="radio" name="comments" value="anonymize" checked>
+          <span>Quitar autor y fecha, dejar el contenido</span></label>
+        <label><input type="radio" name="comments" value="delete" id="commentDelete">
+          <span>Eliminar todos los comentarios</span></label>
+      </div>
+      <p class="muted" id="commentDeleteNote" hidden>En Excel y PowerPoint solo se quita el
+      autor: borrar el contenido de los comentarios puede invalidar referencias del archivo.</p>
+    </fieldset>
+
+    <button type="button" id="clean" class="primary">Limpiar y descargar</button>
+  </section>
+
+  <section class="card" id="resultCard" hidden>
+    <h2>Listo</h2>
+    <p class="fileline"><span id="outName"></span> <span class="muted" id="outSize"></span></p>
+    <ul id="removed" class="removed"></ul>
+  </section>
+
+  <section class="card warn" id="pendingCard" hidden>
+    <h2>Sigue dentro del archivo (no lo tocamos)</h2>
+    <p class="muted">Esto no son metadatos: es contenido o estructura del propio archivo.
+    Quitarlo cambiaría o rompería el documento, así que lo dejamos y te avisamos.</p>
+    <ul id="pending" class="removed"></ul>
+  </section>
+
+  <section class="card prose">
+    <h2>Cómo funciona</h2>
+    <ol class="steps">
+      <li><b>Arrastra el archivo.</b> No sale de tu equipo: no hay subida, no hay servidor
+      que lo reciba.</li>
+      <li><b>Lee el informe.</b> Te mostramos exactamente qué venía dentro: autor,
+      equipo, hora, rutas, coordenadas, versiones anteriores.</li>
+      <li><b>Descarga la copia limpia.</b> El contenido queda igual; solo desaparece la
+      capa de datos personales.</li>
+    </ol>
+  </section>
+
+  <section class="card prose">
+    <h2>Por qué esto importa</h2>
+    <p>Un archivo de Office guarda quién lo creó, quién lo editó por última vez, con qué
+    plantilla, cuánto tiempo se trabajó en él y —cuando el control de cambios estuvo
+    activo— cada inserción y cada borrado con su autor y su hora. En Excel se suman las
+    conexiones a bases de datos, los enlaces a otros libros con rutas de tu disco y las
+    hojas ocultas; en PowerPoint, los autores de los comentarios.</p>
+    <p>Una foto guarda dónde se tomó (coordenadas GPS con precisión de metros), con qué
+    teléfono o cámara, el <b>número de serie del cuerpo y del objetivo</b> —que identifica
+    el aparato de forma única—, la fecha, el software de edición, el autor y el copyright.
+    Una miniatura interna puede mostrar una versión distinta de la imagen.</p>
+    <p>Un PDF es el caso más engañoso: además de su diccionario de autor, puede conservar
+    <b>todas las versiones anteriores</b> dentro del mismo archivo. Un texto que se "borró"
+    con un rectángulo negro sigue ahí, y cualquiera lo recupera con un editor de texto. Por
+    eso reescribimos el documento en lugar de solo ocultar datos.</p>
+  </section>
+
+  <section class="card prose">
+    <h2>Preguntas frecuentes</h2>
+    <dl class="faq">
+      <dt>¿Suben mi archivo a algún servidor?</dt>
+      <dd>No. El programa se descarga una vez en tu navegador y trabaja en memoria. Si abres
+      las herramientas de desarrollo verás que no hay ninguna petición con tu documento.</dd>
+
+      <dt>¿Puede romperse el documento?</dt>
+      <dd>El contenido se copia tal cual: en Office se reescribe el paquete ZIP sin tocar el
+      texto, en fotos no se recodifica ni un píxel, y en PDF se copian los flujos de
+      contenido literalmente. Verificamos la salida página por página antes de descargarla:
+      en PDF, si algo no cuadra, el proceso se cancela en lugar de entregar un archivo
+      dañado.</dd>
+
+      <dt>¿Qué no se puede quitar?</dt>
+      <dd>Lo que es contenido, no metadato: hojas ocultas en Excel, enlaces a otros libros,
+      comentarios, notas del orador, formularios rellenos, archivos adjuntos dentro del PDF
+      (salvo que lo pidas), firmas digitales (que además se invalidan) y códigos QR. Todo
+      eso se detecta y se te avisa, pero no se toca.</dd>
+
+      <dt>¿Sirve para enviar un expediente a un juzgado o a la contraparte?</dt>
+      <dd>Es su caso típico: quitar el rastro de quién redactó qué, cuándo y con qué equipo,
+      sin alterar el texto. Lo que no hace es revisar el contenido: los huecos como
+      <code>[lugar y fecha]</code> los llenas tú.</dd>
+
+      <dt>¿Funciona sin internet?</dt>
+      <dd>Sí, una vez cargada la página puedes instalarla como aplicación y usarla sin
+      conexión. Nada del proceso necesita red.</dd>
+
+      <dt>¿Puedo usarlo con muchos archivos?</dt>
+      <dd>Sí: arrastra hasta 50 a la vez y te devolvemos un único <code>.zip</code> con
+      todas las copias limpias.</dd>
+    </dl>
+  </section>
+</main>
+
+<footer>
+  <p>Procesamiento local: sin servidores, sin cuentas, sin registros. Funciona sin conexión.</p>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
