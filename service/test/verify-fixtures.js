@@ -89,7 +89,10 @@ try {
       const salida = execFileSync(
         'python',
         [caso.verificador, caso.fichero, rutaLimpia.replace(`${RAICES}\\`, '').replace(`${RAICES}/`, ''), ...caso.args],
-        { cwd: RAICES, encoding: 'utf8' },
+        // PYTHONIOENCODING: en Windows el stdout de python es cp1252, así que
+        // "VERIFICACIÓN OK" llega con la Ó mal codificada y el test falla sin
+        // que el archivo limpio tenga nada malo.
+        { cwd: RAICES, encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } },
       );
       const verificado = /VERIFICACIÓN OK/.test(salida);
       check(`${caso.fichero}: ${caso.verificador} dice VERIFICACIÓN OK`, verificado,
