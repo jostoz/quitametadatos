@@ -65,6 +65,21 @@ if (cabecera) {
   console.log(`Liquidación: ${l.success ? 'OK' : 'FALLÓ'} · ${l.network} · tx ${l.transaction}`);
 }
 
+// El facilitador dice por esta cabecera si catalogó el servicio en el "bazaar"
+// (el catálogo con el que los agentes encuentran APIs x402).
+const extensiones = pagado.headers.get('extension-responses');
+if (extensiones) {
+  try {
+    const d = JSON.parse(Buffer.from(extensiones, 'base64').toString('utf8'));
+    for (const [nombre, r] of Object.entries(d)) {
+      console.log(`Extensión ${nombre}: ${r.status}${r.rejectedReason ? ` (${r.rejectedReason})` : ''}`);
+      if (nombre === 'bazaar' && r.status === 'success') {
+        console.log('  → el servicio quedó catalogado para que otros agentes lo encuentren');
+      }
+    }
+  } catch { /* cabecera no legible: no es crítico */ }
+}
+
 if (pagado.status !== 200) {
   console.error(`\nNo se completó: ${(await pagado.text()).slice(0, 300)}`);
   process.exit(1);
