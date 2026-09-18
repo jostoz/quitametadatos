@@ -162,3 +162,14 @@ footer { padding: 10px 20px 50px; color: var(--muted); font-size: .85rem; }
 }
 .sharelink:hover { border-color: var(--accent); }
 .indentsmall { margin: 10px 0 0; }
+
+/* Invitación a la API (para quien automatiza) */
+.api-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 0; }
+.api-line code {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: .85rem;
+  overflow-wrap: anywhere;
+}

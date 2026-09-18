@@ -54,14 +54,25 @@ function setupShare() {
     });
   }
 
-  $('shareCopy').addEventListener('click', async () => {
+  copiar($('shareCopy'), url, $('shareCopied'));
+}
+
+/** Copia un texto al portapapeles y muestra el aviso, sin pedir permisos raros. */
+function copiar(boton, texto, aviso) {
+  boton.addEventListener('click', async () => {
     try {
-      await navigator.clipboard.writeText(url);
-      $('shareCopied').hidden = false;
+      await navigator.clipboard.writeText(texto);
+      aviso.hidden = false;
+      setTimeout(() => { aviso.hidden = true; }, 4000);
     } catch {
-      showError('No se pudo copiar el enlace. Cópialo de la barra del navegador.');
+      showError(`No se pudo copiar. Cópialo a mano: ${texto}`);
     }
   });
+}
+
+// La dirección de la API para quien automatiza (el enlace que ve el visitante).
+function setupApi() {
+  copiar($('apiCopy'), $('apiUrl').textContent.trim(), $('apiCopied'));
 }
 
 // ---------------------------------------------------------------- lectura
@@ -435,6 +446,7 @@ drop.addEventListener('drop', (e) => {
 });
 $('clean').addEventListener('click', clean);
 setupShare();
+setupApi();
 
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   window.addEventListener('load', () => {
